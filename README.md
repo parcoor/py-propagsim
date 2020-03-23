@@ -39,7 +39,7 @@ The probability of an *agent* to be selected for a move is:
 The first factor represents the mobility of the *agent* so to say. The second factor represents the fact that the more severe the state of an *agent*, the less the probability that it will move.
 
 ### Cell selection
-The cell where to move is sampled according to a probability
+The *cell* where to move a selected *agent* is sampled according to a probability
 
 <img src="https://render.githubusercontent.com/render/math?math=p \~ distance(home\_cell(agent), cell) \times attractivity(cell)">
 
