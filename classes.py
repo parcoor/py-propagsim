@@ -21,7 +21,7 @@ class State:
             a state having contagiousity > 0
         :type sensitivity: float between 0 and 1
         :param severity: measure the severity of the state
-        :type severity: positive numerical value
+        :type severity: float between 0 and 1
         """
         self.id = id
         self.name = name
@@ -151,7 +151,7 @@ class Agent:
 
 
 class Cell:
-    def __init__(self, id, position, attractivity, agents):
+    def __init__(self, id, position, attractivity, unsafety, agents):
         """A cell is figuratively a place where several agents can be together and possibly get 
         infected from an infected agent in the cell.
         A cell has also a geographic `position` (Euclidean coordinates) and an `attractivity` influencing the 
@@ -163,12 +163,15 @@ class Cell:
         :type position: iterable of length 2 containing non-imaginary numerical values
         :param attractivity: attractivity of the cell
         :type attractivity: positive numerical value
+        :param unsafety: unsafety of the cell (positively correlated to the probability than contagions happen in the cell)
+        :type unsafety: numerical value between 0 and 1
         :param agents: agents initially belonging to the cell. This cell will be their home cell
-        :type agents: list of <Agents>
+        :type agents: list of <Agent>
         """
         self.id = id
         self.position = position
         self.attractivity = attractivity
+        self.unsafety = unsafety
         self.agents = agents
 
     def get_id(self):
@@ -180,6 +183,12 @@ class Cell:
     def get_attractivity(self):
         return self.attractivity
 
+    def get_unsafety(self):
+        return self.unsafety
+
+    def set_unsafety(self, unsafety):
+        self.unsafety = unsafety
+
     def get_agents_id(self):
         return [agent.get_id() for agent in self.agents]
 
@@ -188,10 +197,10 @@ class Cell:
         (greatest contagiousity among agents in cell) * (sensitivity of agent)
         """
         greatest_contagiousity = max([agent.get_state().get_contagiousity() for agent in self.agents])
-        if greatest_contagiousity == 0:
-            return
+        if greatest_contagiousity == 0: 
+            return  # no update if no agent in the cell is contagious
         for agent in self.agents:
-            proba_infection = greatest_contagiousity * agent.get_state().get_sensitivity()
+            proba_infection = greatest_contagiousity * agent.get_state().get_sensitivity() * self.unsafety
             draw = uniform()
             if draw < proba_infection:
                 agent.get_infected()
@@ -232,7 +241,6 @@ class Map:
         self.attractivity_arr = array([cell.get_attractivity() for cell in cells])
 
         self.move_proba_matrix = get_move_proba_matrix(self.pos_cells_arr, self.pos_agents_arr, self.attractivity_arr)
-        self.probas_move = array([agent.get_p_move() for agent in agents])
 
 
     def move_agent_cell(self, agent, cell, update=True):
@@ -259,7 +267,9 @@ class Map:
         it's considered to return (or stay) home during this move """
         # Select agents who make a move
         draw = uniform()
-        inds_agents2move = where(self.probas_move >= draw)[0]
+        probas_move = [agent.get_p_move() * (1 - agent.get_state().get_severity()) for agent in self.agents]  # TODO: parallelize
+        probas_move = array(probas_move)
+        inds_agents2move = where(probas_move >= draw)[0]
         for i in inds_agents2move:  # TODO: parallelize
             current_agent = self.agents[i]
             probas_new_cell = self.move_proba_matrix[:,i].flatten()

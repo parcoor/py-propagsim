@@ -32,14 +32,14 @@ ind_2 = Agent(id=2, p_move=p_move_2, transitions=transitions, states=states, dur
 
 position_1 = (1, 1)
 attractivity_1 = 0.5
-cell_1 = Cell(id=1, position=position_1, attractivity=attractivity_1, agents=[ind_1, ind_2])
+cell_1 = Cell(id=1, position=position_1, attractivity=attractivity_1, unsafety=1, agents=[ind_1, ind_2])
 
 for i in range(6):
     ind_1.forward()
     ind_2.forward()
     if i == 1:
-        ind_1.set_state(state1)  # `ind_1` get in state 'sick'
-        cell_1.update_agent_states()  # agents in the same celle than `ind_1` get also eventually infected
+        ind_1.set_state(state1)  # `ind_1` gets in state 'sick'
+        cell_1.update_agent_states()  # agents in the same cell than `ind_1` get also eventually infected
     validated_1 = ('OK' if ((i == 0 or i > 3) and ind_1.get_state().get_name() == state0.get_name()) or 
                     (1 <= i <= 3 and ind_1.get_state().get_name() == state1.get_name())
                     else 'Failed')
@@ -67,8 +67,8 @@ ind_3 = Agent(id=3, p_move=p_move_3, transitions=transitions, states=states, dur
 ind_4 = Agent(id=4, p_move=p_move_4, transitions=transitions, states=states, durations=durations_4, current_state=state0, home_cell_id=3)
 
 position_2, position_3 = (1, 4), (2, 2)
-cell_2 = Cell(id=2, position=position_2, attractivity=attractivity_1, agents=[ind_3])
-cell_3 = Cell(id=3, position=position_3, attractivity=attractivity_1, agents=[ind_4])
+cell_2 = Cell(id=2, position=position_2, attractivity=attractivity_1, unsafety=1, agents=[ind_3])
+cell_3 = Cell(id=3, position=position_3, attractivity=attractivity_1, unsafety=1, agents=[ind_4])
 
 cells = [cell_1, cell_2, cell_3]
 agents = [ind_1, ind_2, ind_3, ind_4]
@@ -103,7 +103,7 @@ print(f'Check for move_proba_matrix 0 for current cells: {validated}')
 Test 3: Map
 Create a map with the `agents` and `cells` defined above
 1. Check that after a move there are no duplicated agents
-2. Check that after `all_home()` the cells have the same agents
+2. Check that after `all_home()` the cells have the same agents than at the beginning
 """
 
 map = Map(cells, agents)
