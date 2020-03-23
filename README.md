@@ -33,15 +33,15 @@ A move consists in moving *agent*s to other cells. When a move is done, all *age
 ### Agent selection
 The probability of an *agent* to be selected for a move is:
 
-<img src="https://render.githubusercontent.com/render/math?math=p = proba_move(agent) \times (1 - severity(state(agent)))">
+<img src="https://render.githubusercontent.com/render/math?math=p = proba\_move(agent) \times (1 - severity(state(agent)))">
  
 
 The first factor represents the mobility of the *agent* so to say. The second factor represents the fact that the more severe the state of an *agent*, the less the probability that it will move.
 
 ### Cell selection
-The cell where to move is sampled according to a probability $p ~ distance(home_cell(agent), cell) * attractivity(cell)$
+The cell where to move is sampled according to a probability
 
-<img src="https://render.githubusercontent.com/render/math?math=p \~ distance(home_cell(agent), cell) * attractivity(cell)">
+<img src="https://render.githubusercontent.com/render/math?math=p \~ distance(home\_cell(agent), cell) \times attractivity(cell)">
 
 **NB**: 
 * a limitation of this model is that the attractivity of each *cell* is the same for all *agent*. An extension / refinement of this model would be to have *cell* attractivities personalized by agent.
