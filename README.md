@@ -12,7 +12,7 @@ A contagion happens within a cell, when it contains several agents at the same t
 When an agent has a state with *contagiousity* > 0, then the other agents in the same cell can get infected. 
 The probability of *Agent_1* to contaminate *Agent_2* in *cell* is given by:
 
-![equation] p = contagiousity(state(Agent_1)) \times sensitivity(state(Agent_2)) \times unsafety(cell)
+![equation](p = contagiousity(state(Agent_1)) \times sensitivity(state(Agent_2)) \times unsafety(cell))
 
 **NB**: 
 * The highest contagiousity in the cell is taken to compute *p*.
