@@ -2,6 +2,7 @@ from numpy.random import choice, uniform
 from numpy import array, concatenate, where
 from itertools import compress
 from utils import get_least_severe_state, get_move_proba_matrix
+from multiprocessing import Pool, cpu_count
 
 
 class State:
@@ -199,7 +200,7 @@ class Cell:
         greatest_contagiousity = max([agent.get_state().get_contagiousity() for agent in self.agents])
         if greatest_contagiousity == 0: 
             return  # no update if no agent in the cell is contagious
-        for agent in self.agents:
+        for agent in self.agents:  # unnecessary to parallelize, there shouldn't be too many agents in a single cell
             proba_infection = greatest_contagiousity * agent.get_state().get_sensitivity() * self.unsafety
             draw = uniform()
             if draw < proba_infection:
@@ -245,11 +246,19 @@ class Map:
 
     def move_agent_cell(self, agent, cell, update=True):
         """ Move `agent` to `cell`. 
-        `update`: if to update its home cell state after the move """
+        `update`: if to update its new cell state after the move """
         current_cell = self.id2cell.get(agent.get_current_cell_id())
         current_cell.remove_agent(agent.get_id())
         cell.add_agent(agent, update=update)
         agent.set_current_cell_id(cell.get_id())
+
+
+    def move_single_agent(self, i):
+        current_agent = self.agents[i]
+        probas_new_cell = self.move_proba_matrix[:,i].flatten()
+        ind_new_cell = int(choice(self.n_cells, 1, p=probas_new_cell))
+        new_cell = self.cells[ind_new_cell]
+        self.move_agent_cell(current_agent, new_cell)
 
 
     def move_home(self, agent, update=False):
@@ -261,30 +270,46 @@ class Map:
         self.move_agent_cell(agent, cell, update)
 
 
+    def move_home_ind(self, i):
+        self.move_home(self.agents[i])
+
+
+    @classmethod
+    def get_single_proba_move(cls, agent):
+        return agent.get_p_move() * (1 - agent.get_state().get_severity())
+
+
     def make_move(self):
         """ Select agents to move according to their probability to move and then 
         move these to a cell according to `move_proba_matrix`. If an agent is not selected for a move, 
         it's considered to return (or stay) home during this move """
         # Select agents who make a move
         draw = uniform()
-        probas_move = [agent.get_p_move() * (1 - agent.get_state().get_severity()) for agent in self.agents]  # TODO: parallelize
+        
+        pool = Pool(cpu_count())
+        probas_move = pool.map(Map.get_single_proba_move, self.agents)
         probas_move = array(probas_move)
         inds_agents2move = where(probas_move >= draw)[0]
-        for i in inds_agents2move:  # TODO: parallelize
-            current_agent = self.agents[i]
-            probas_new_cell = self.move_proba_matrix[:,i].flatten()
-            ind_new_cell = int(choice(self.n_cells, 1, p=probas_new_cell))
-            new_cell = self.cells[ind_new_cell]
-            self.move_agent_cell(current_agent, new_cell)
+
+        for i in inds_agents2move:
+            pool.apply_async(self.move_single_agent, args=(self, i))
+        
         # Move back home agents who didn't move
-        agents2home = [self.agents[i] for i in range(self.n_agents) if i not in inds_agents2move]
-        for agent in agents2home:  # TODO: parallelize
-            self.move_home(agent)
+        inds_agents2home = list(set(list(range(self.n_agents))) - set(inds_agents2move))
+
+        for i in inds_agents2home:
+            pool.apply_async(Map.move_home_ind, args=(self, i))
+
+        pool.close()
+
 
     def all_home(self):
         """ Move all agents to their home cell """
-        for agent in self.agents:  # TODO: parallelize
-            self.move_home(agent)
+        pool = Pool(cpu_count())
+        for i in range(self.n_agents):
+            pool.apply_async(Map.move_home_ind, args=(self, i))
+        pool.close()
+
 
     def get_repartition(self):
         """ returns repartition of agents by cell as dict: cell_id => [agent_id in cell] """
