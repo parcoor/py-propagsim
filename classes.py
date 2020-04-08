@@ -131,6 +131,10 @@ class Agent:
         if self.current_state.get_severity() < self.least_severe_state.get_severity():
             self.set_state(self.least_severe_state)
 
+    def is_infected(self):
+        """ an agent is considered infected if its state has a contagiousity or a severity > 0 """
+        return self.current_state.get_contagiousity() > 0 or self.current_state.get_severity() > 0
+
 
     def get_next_state(self, state):
         """ randomly sample the state following `state` according to `self.transitions` """
@@ -219,7 +223,7 @@ class Cell:
 
         
 class Map:
-    def __init__(self, cells, agents):
+    def __init__(self, cells, agents, possible_state_ids):
         """ A map contains a list of `cells`, `agents` and an implementation of the 
         way agents can move from a cell to another.
         It also contains methods to get the current repartition of agents among the cells.
@@ -228,11 +232,16 @@ class Map:
         :type cells: list of <Cell>
         :param agents: agents contained in the map
         :type agents: list of <Agent>
+        :param possible_state_ids: all the possible states than `agents` can have
+        :type possible_state_ids: list of Integer (int)
         """
         self.cells = cells
         self.agents = agents
+        self.possible_state_ids = possible_state_ids
         self.n_cells = len(cells)
         self.n_agents = len(agents)
+        self.n_infected_agents = len([agent for agent in agents if agent.is_infected()])
+        self.r = 0  # R coeff: how many agent does an infected agent infect in average
         # Define dicts to access own cells and agents
         self.id2cell = {cell.get_id(): cell for cell in cells}
         self.id2agents = {agent.get_id(): agent for agent in agents}
@@ -274,9 +283,15 @@ class Map:
         self.move_home(self.agents[i])
 
 
+    # Class methods defined for parallelization
     @classmethod
     def get_single_proba_move(cls, agent):
         return agent.get_p_move() * (1 - agent.get_state().get_severity())
+
+
+    @classmethod
+    def forward_single_agent(cls, agent):
+        agent.forward()
 
 
     def make_move(self):
@@ -299,7 +314,6 @@ class Map:
 
         for i in inds_agents2home:
             pool.apply_async(Map.move_home_ind, args=(self, i))
-
         pool.close()
 
 
@@ -311,7 +325,30 @@ class Map:
         pool.close()
 
 
+    def forward_all_cells(self):
+        """ move all agents in map one time step forward """
+        pool = Pool(cpu_count())
+        for agent in self.agents:
+            pool.apply_async(Map.forward_single_agent, args=(self, agent))
+        pool.close()
+        # Update R coeff after a global forward
+        new_n_infected_agents = len([agent for agent in self.agents if agent.is_infected()])
+        if new_n_infected_agents == 0 or self.n_infected_agents == 0:
+            self.r = 0
+        else:
+            self.r = new_n_infected_agents / self.n_infected_agents
+        self.n_infected_agents = new_n_infected_agents
+
+
     def get_repartition(self):
         """ returns repartition of agents by cell as dict: cell_id => [agent_id in cell] """
         return {cell.get_id(): cell.get_agents_id() for cell in self.cells}
+
+
+    def get_states_numbers(self):
+        """ For all possible states, return the number of agents in the map in this state """
+        states_numbers = {id: 0 for id in self.possible_state_ids}
+        for agent in self.agents:
+            states_numbers[agent.get_state().get_id()] +=1
+        return states_numbers
             

@@ -106,7 +106,7 @@ Create a map with the `agents` and `cells` defined above
 2. Check that after `all_home()` the cells have the same agents than at the beginning
 """
 
-map = Map(cells, agents)
+map = Map(cells, agents, possible_state_ids=(0, 1))
 repartition_0 = map.get_repartition()
 # 1. Check there is no duplicate agent
 map.make_move()
@@ -124,3 +124,8 @@ for cell_id, agents_cell in repartition_0.items():
         validated = 'Failed'
         break
 print(f'Check for return to initial state after `all_home()`: {validated}')
+
+# 3. Check that the number of agents in given states is correct
+state_numbers = map.get_states_numbers()
+validated = 'OK' if (state_numbers[0] == 4 and state_numbers[1] == 0) else 'Failed'
+print(f'Check for state numbers: {validated}')
