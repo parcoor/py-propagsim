@@ -18,6 +18,8 @@ The probability of *Agent_1* to contaminate *Agent_2* in *cell* is given by:
 * The highest contagiousity in the cell is taken to compute *p*.
 * The *unsafety* of a *cell* measures how a cell is unsafe for contagion (social distancing respected or not inside etc.)
 
+<img src="../contagion.png" alt="illustration of CAST contagion process">
+
 If *Agent_2* gets infected, it gets to its own state having the least strictly positive *severity* (it can't jump directly to a more severe state).
 
 ## State transition
@@ -42,6 +44,8 @@ The first factor represents the mobility of the *agent* so to say. The second fa
 The *cell* where to move a selected *agent* is sampled according to a probability
 
 <img src="https://render.githubusercontent.com/render/math?math=p \~ distance(home\_cell(agent), cell) \times attractivity(cell)">
+
+<img src="../move.png" alt="illustration of CAST move process">
 
 **NB**: 
 * a limitation of this model is that the attractivity of each *cell* is the same for all *agent*. An extension / refinement of this model would be to have *cell* attractivities personalized by agent.
