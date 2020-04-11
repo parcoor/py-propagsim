@@ -43,7 +43,7 @@ The first factor represents the mobility of the *agent* so to say. The second fa
 ### Cell selection
 The *cell* where to move a selected *agent* is sampled according to a probability
 
-<img src="https://render.githubusercontent.com/render/math?math=p \~ distance(home\_cell(agent), cell) \times attractivity(cell)">
+<img src="https://render.githubusercontent.com/render/math?math=p \~ \frac{attractivity(cell)}{distance(home\_cell(agent), cell) \times severity(state(agent))}">
 
 ![CAST move process](../master/img/move.png?raw=true "CAST move process")
 
