@@ -10,9 +10,9 @@ Basically, this model considers three types of object:
 ## Contagion
 A contagion happens within a cell, when it contains several agents at the same time and one of them is contagious.
 When an agent has a state with *contagiousity* > 0, then the other agents in the same cell can get infected. 
-The probability of *Agent_1* to contaminate *Agent_2* in *cell* is given by:
+The probability of *Agent_A* to contaminate *Agent_B* in *cell* is given by:
 
-<img src="https://render.githubusercontent.com/render/math?math=p = contagiousity(state(Agent_1)) \times sensitivity(state(Agent_2)) \times unsafety(cell)">
+<img src="https://render.githubusercontent.com/render/math?math=p = contagiousity(state(Agent_A)) \times sensitivity(state(Agent_B)) \times unsafety(cell)">
 
 **NB**: 
 * The highest contagiousity in the cell is taken to compute *p*.
@@ -20,7 +20,7 @@ The probability of *Agent_1* to contaminate *Agent_2* in *cell* is given by:
 
 ![CAST contamination process](../master/img/contagion.png?raw=true "CAST contamination process")
 
-If *Agent_2* gets infected, it gets to its own state having the least strictly positive *severity* (it can't jump directly to a more severe state).
+If *Agent_B* gets infected, it gets to its own state having the least strictly positive *severity* (it can't jump directly to a more severe state).
 
 ## State transition
 A *state transition matrix* and *state durations* are attached to each *agent*. The *state transition matrix* is a Markovian matrix describing the transition probabilities between the states an agent can take. The *state durations* are the duration of each state. If a agent is in a given *state*, it will switch to another one sampled according to its *state transition matrix*
