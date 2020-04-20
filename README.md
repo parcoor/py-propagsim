@@ -51,3 +51,8 @@ The *cell* where to move a selected *agent* is sampled according to a probabilit
 * a limitation of this model is that the attractivity of each *cell* is the same for all *agent*. An extension / refinement of this model would be to have *cell* attractivities personalized by agent.
 * The distance is always computed from the *home_cell* of an agent, not from its *current_cell*. An *agent* is considered wandering around its *home_cell*
 * The *agent*s not selected for a move will be moved to their *home_cell* afterward
+
+## Temporality
+Each time *period* contains move rounds (they don't have to have all the same number of move *rounds*). During each move *round*, *agent*s are selected and moved as described above. Id they are infected, they can infect other agents in the same *cell* than themselves. A time *period* finishes when all agents are simultanously *forwarded*. Each *agent* is actually in a given state, that has a given duration. By a *forward*, the time in this state is incremented by 1. If this time then exceeds the duration of the current state of the agent, the agent moves to the next state according to its *transition* described above.
+
+![CAST temporality](../master/img/contagion.png?raw=true "CAST temporality")
