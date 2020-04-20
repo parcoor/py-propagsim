@@ -55,4 +55,4 @@ The *cell* where to move a selected *agent* is sampled according to a probabilit
 ## Temporality
 Each time *period* contains move rounds (they don't have to have all the same number of move *rounds*). During each move *round*, *agent*s are selected and moved as described above. Id they are infected, they can infect other agents in the same *cell* than themselves. A time *period* finishes when all agents are simultanously *forwarded*. Each *agent* is actually in a given state, that has a given duration. By a *forward*, the time in this state is incremented by 1. If this time then exceeds the duration of the current state of the agent, the agent moves to the next state according to its *transition* described above.
 
-![CAST temporality](../master/img/contagion.png?raw=true "CAST temporality")
+![CAST temporality](../master/img/temporality.png?raw=true "CAST temporality")
