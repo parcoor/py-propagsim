@@ -1,4 +1,5 @@
 This is the implementation in Python of a propagation model that we propose to call *CAST* as *Cell Agent State Transitions*.
+See this [notebook](toy_simulation.ipynb) for a (toy) example of an implementation of this model
 
 # Model description
 ## Basic objects
