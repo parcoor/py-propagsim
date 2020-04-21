@@ -133,7 +133,7 @@ class Agent:
 
     def is_infected(self):
         """ an agent is considered infected if its state has a contagiousity or a severity > 0 """
-        return self.current_state.get_contagiousity() > 0 or self.current_state.get_severity() > 0
+        return (self.current_state.get_contagiousity() > 0 or self.current_state.get_severity() > 0) and (self.current_state.get_severity() < 1)
 
 
     def get_next_state(self, state):
@@ -223,7 +223,7 @@ class Cell:
 
         
 class Map:
-    def __init__(self, cells, agents, possible_state_ids):
+    def __init__(self, cells, agents, possible_state_ids, verbose=0):
         """ A map contains a list of `cells`, `agents` and an implementation of the 
         way agents can move from a cell to another.
         It also contains methods to get the current repartition of agents among the cells.
@@ -238,6 +238,7 @@ class Map:
         self.cells = cells
         self.agents = agents
         self.possible_state_ids = possible_state_ids
+        self.verbose = verbose
         self.n_cells = len(cells)
         self.n_agents = len(agents)
         self.n_infected_agents = len([agent for agent in agents if agent.is_infected()])
@@ -251,6 +252,10 @@ class Map:
         self.attractivity_arr = array([cell.get_attractivity() for cell in cells])
 
         self.move_proba_matrix = get_move_proba_matrix(self.pos_cells_arr, self.pos_agents_arr, self.attractivity_arr)
+
+
+    def get_agent(self, id):
+        return self.id2agents.get(id)
 
 
     def move_agent_cell(self, agent, cell, update=True):
@@ -268,9 +273,11 @@ class Map:
         ind_new_cell = int(choice(self.n_cells, 1, p=probas_new_cell))
         new_cell = self.cells[ind_new_cell]
         self.move_agent_cell(current_agent, new_cell)
+        if self.verbose >= 2:
+            print(f'INFO: agent {current_agent.get_id()} moved to cell {new_cell.get_id()}')
 
 
-    def move_home(self, agent, update=False):
+    def move_home(self, agent, update):
         """ Move `agent` to its home cell. 
         `update`: if to update its home cell state after the move """
         if agent.get_current_cell_id() == agent.get_home_cell_id():
@@ -279,19 +286,8 @@ class Map:
         self.move_agent_cell(agent, cell, update)
 
 
-    def move_home_ind(self, i):
-        self.move_home(self.agents[i])
-
-
-    # Class methods defined for parallelization
-    @classmethod
-    def get_single_proba_move(cls, agent):
-        return agent.get_p_move() * (1 - agent.get_state().get_severity())
-
-
-    @classmethod
-    def forward_single_agent(cls, agent):
-        agent.forward()
+    def move_home_ind(self, i, update=True):
+        self.move_home(self.agents[i], update)
 
 
     def make_move(self):
@@ -300,43 +296,36 @@ class Map:
         it's considered to return (or stay) home during this move """
         # Select agents who make a move
         draw = uniform()
-        
-        pool = Pool(cpu_count())
-        probas_move = pool.map(Map.get_single_proba_move, self.agents)
-        probas_move = array(probas_move)
+        probas_move = array([(agent.get_p_move() * (1 - agent.get_state().get_severity())) for agent in self.agents])
         inds_agents2move = where(probas_move >= draw)[0]
+        if self.verbose >= 1:
+            print(f'INFO: {inds_agents2move.shape[0]} selected for move')
 
         for i in inds_agents2move:
-            pool.apply_async(self.move_single_agent, args=(self, i))
+            self.move_single_agent(i)
         
         # Move back home agents who didn't move
         inds_agents2home = list(set(list(range(self.n_agents))) - set(inds_agents2move))
-
         for i in inds_agents2home:
-            pool.apply_async(Map.move_home_ind, args=(self, i))
-        pool.close()
+            self.move_home_ind(i)
 
 
     def all_home(self):
         """ Move all agents to their home cell """
-        pool = Pool(cpu_count())
         for i in range(self.n_agents):
-            pool.apply_async(Map.move_home_ind, args=(self, i))
-        pool.close()
+            self.move_home_ind(i)
 
 
     def forward_all_cells(self):
         """ move all agents in map one time step forward """
-        pool = Pool(cpu_count())
         for agent in self.agents:
-            pool.apply_async(Map.forward_single_agent, args=(self, agent))
-        pool.close()
+            agent.forward()
         # Update R coeff after a global forward
         new_n_infected_agents = len([agent for agent in self.agents if agent.is_infected()])
         if new_n_infected_agents == 0 or self.n_infected_agents == 0:
             self.r = 0
         else:
-            self.r = new_n_infected_agents / self.n_infected_agents
+            self.r = (new_n_infected_agents - self.n_infected_agents) / self.n_infected_agents
         self.n_infected_agents = new_n_infected_agents
 
 
@@ -351,4 +340,7 @@ class Map:
         for agent in self.agents:
             states_numbers[agent.get_state().get_id()] +=1
         return states_numbers
+
+    def get_r(self):
+        return self.r
             
