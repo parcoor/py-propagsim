@@ -1,5 +1,6 @@
 # py-propagsim
 [![license](https://img.shields.io/github/license/DAVFoundation/captain-n3m0.svg?style=flat-square)](https://github.com/DAVFoundation/captain-n3m0/blob/master/LICENSE)
+
 Author: Manuel Capel
 
 ![CAST geographical time evolution](../master/img/mapevolution.gif?raw=true "CAST geographical time evolution")
@@ -8,7 +9,7 @@ This is the implementation in Python of a propagation model that we propose to c
 
 See this [notebook](toy_simulation.ipynb) for a (toy) example of an implementation of this model
 
-![CAST state time evolution](../master/img/mapevolution.gif?raw=true "CAST state time evolution")
+![CAST state time evolution](../master/img/nevolution.png?raw=true "CAST state time evolution")
 
 ## Model description
 ### Basic objects
