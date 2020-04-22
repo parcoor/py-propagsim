@@ -8,6 +8,8 @@ This is the implementation in Python of a propagation model that we propose to c
 
 See this [notebook](toy_simulation.ipynb) for a (toy) example of an implementation of this model
 
+![CAST state time evolution](../master/img/mapevolution.gif?raw=true "CAST state time evolution")
+
 ## Model description
 ### Basic objects
 Basically, this model considers three types of object:
