@@ -87,6 +87,7 @@ class Agent:
         self.current_state_age = 0
         self.current_state_index = self.name2index.get(current_state.get_name())
         self.least_severe_state = get_least_severe_state(states)
+        self.been_infected = False
 
 
     def get_id(self):
@@ -130,10 +131,20 @@ class Agent:
         preventing absurd behavior like agent getting to a less severe state after infection """
         if self.current_state.get_severity() < self.least_severe_state.get_severity():
             self.set_state(self.least_severe_state)
+            self.been_infected = True
 
     def is_infected(self):
         """ an agent is considered infected if its state has a contagiousity or a severity > 0 """
         return (self.current_state.get_contagiousity() > 0 or self.current_state.get_severity() > 0) and (self.current_state.get_severity() < 1)
+
+    
+    def has_been_infected(self):
+        """ if the agent has already been affected in the past (for R coeff calculation) """
+        return self.been_infected
+
+
+    def is_contagious(self):
+        return self.current_state.get_contagiousity() > 0
 
 
     def get_next_state(self, state):
@@ -241,7 +252,8 @@ class Map:
         self.verbose = verbose
         self.n_cells = len(cells)
         self.n_agents = len(agents)
-        self.n_infected_agents = len([agent for agent in agents if agent.is_infected()])
+        self.n_infected_agents = len([agent for agent in agents if agent.has_been_infected()])
+        self.n_contagious_agents = len([agent for agent in agents if agent.is_contagious()])
         self.r = 0  # R coeff: how many agent does an infected agent infect in average
         # Define dicts to access own cells and agents
         self.id2cell = {cell.get_id(): cell for cell in cells}
@@ -321,12 +333,13 @@ class Map:
         for agent in self.agents:
             agent.forward()
         # Update R coeff after a global forward
-        new_n_infected_agents = len([agent for agent in self.agents if agent.is_infected()])
-        if new_n_infected_agents == 0 or self.n_infected_agents == 0:
+        new_n_infected_agents = len([agent for agent in self.agents if agent.has_been_infected()])
+        if new_n_infected_agents == 0 or self.n_contagious_agents == 0:
             self.r = 0
         else:
-            self.r = (new_n_infected_agents - self.n_infected_agents) / self.n_infected_agents
+            self.r = (new_n_infected_agents - self.n_infected_agents) / self.n_contagious_agents
         self.n_infected_agents = new_n_infected_agents
+        self.n_contagious_agents = len([agent for agent in self.agents if agent.is_contagious()])
 
 
     def get_repartition(self):
