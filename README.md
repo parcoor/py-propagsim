@@ -9,7 +9,7 @@ This is the implementation in Python of a propagation model that we propose to c
 
 [:fr:](https://gist.github.com/Helmasaur/fb8ca2c08131c58341d443b43672a1f5) For French, see this [blog article](https://blog.parcoor.com/2020-04-22-cast-prediction-propagation/)
 
-![CAST contaminations transitions](../master/img/contamination-chain.gif?raw=true "CAST contaminations transitions")
+![CAST contaminations transitions](../master/img/chainevolution.gif?raw=true "CAST contaminations transitions")
 
 ## Usage
 See this [notebook](examples/example0.ipynb) for a (toy) example of an implementation of this model
