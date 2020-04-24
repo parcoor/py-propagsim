@@ -10,7 +10,7 @@ This is the implementation in Python of a propagation model that we propose to c
 [:fr:](https://gist.github.com/Helmasaur/fb8ca2c08131c58341d443b43672a1f5) For French, see this [blog article](https://blog.parcoor.com/2020-04-22-cast-prediction-propagation/)
 
 ## Usage
-See this [notebook](toy_simulation.ipynb) for a (toy) example of an implementation of this model
+See this [notebook](examples/example0.ipynb) for a (toy) example of an implementation of this model
 
 ![CAST state time evolution](../master/img/nevolution.png?raw=true "CAST state time evolution")
 
