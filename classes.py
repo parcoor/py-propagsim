@@ -88,6 +88,7 @@ class Agent:
         self.current_state_index = self.name2index.get(current_state.get_name())
         self.least_severe_state = get_least_severe_state(states)
         self.been_infected = False
+        self.contaminated = []  # list of ids of agents contaminated by this agent
 
 
     def get_id(self):
@@ -129,9 +130,13 @@ class Agent:
         """ if the agent gets infected, it jumps to the state having the lowest >0 severity if 
         its current state has severity 0, otherwise it stays to the same state, for 
         preventing absurd behavior like agent getting to a less severe state after infection """
+        newly_infected = False
         if self.current_state.get_severity() < self.least_severe_state.get_severity():
             self.set_state(self.least_severe_state)
+            newly_infected = not self.been_infected
             self.been_infected = True
+        return newly_infected
+    
 
     def is_infected(self):
         """ an agent is considered infected if its state has a contagiousity or a severity > 0 """
@@ -145,6 +150,21 @@ class Agent:
 
     def is_contagious(self):
         return self.current_state.get_contagiousity() > 0
+
+
+    def append_contaminated(self, agent_id):
+        self.contaminated.append(agent_id)
+
+
+    def get_contaminated_list(self):
+        return self.contaminated
+
+    
+    def reset(self, state):
+        """ reset an agent to an initial state """
+        self.current_state = state
+        self.contaminated = []
+        self.been_infected = False
 
 
     def get_next_state(self, state):
@@ -212,14 +232,21 @@ class Cell:
         """ update the state of the agent in the cell by activing contagion. The probability for an agent to get infected is:
         (greatest contagiousity among agents in cell) * (sensitivity of agent)
         """
-        greatest_contagiousity = max([agent.get_state().get_contagiousity() for agent in self.agents])
+        most_contagious_agent = None
+        for agent in self.agents:
+            if (most_contagious_agent is None or 
+                    agent.get_state().get_contagiousity() > most_contagious_agent.get_state().get_contagiousity()):
+                most_contagious_agent = agent
+        greatest_contagiousity = most_contagious_agent.get_state().get_contagiousity()
         if greatest_contagiousity == 0: 
             return  # no update if no agent in the cell is contagious
         for agent in self.agents:  # unnecessary to parallelize, there shouldn't be too many agents in a single cell
             proba_infection = greatest_contagiousity * agent.get_state().get_sensitivity() * self.unsafety
             draw = uniform()
             if draw < proba_infection:
-                agent.get_infected()
+                newly_infected = agent.get_infected()
+                if newly_infected:
+                    most_contagious_agent.append_contaminated(agent.get_id())
 
     def add_agent(self, agent, update=True):
         """ add `agent` to the cell. `update`: if to proceed to contagion within the cell or not. """
