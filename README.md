@@ -11,6 +11,11 @@ This is the implementation in Python of a propagation model that we propose to c
 
 ![CAST contaminations transitions](../master/img/chainevolution.gif?raw=true "CAST contaminations transitions")
 
+## Installation
+```
+pip install propagsim
+```
+
 ## Usage
 See this [notebook](examples/example0.ipynb) for a (toy) example of an implementation of this model
 
