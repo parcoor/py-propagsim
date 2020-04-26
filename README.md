@@ -5,7 +5,7 @@ Author: Manuel Capel
 
 ![CAST geographical time evolution](../master/img/mapevolution.gif?raw=true "CAST geographical time evolution")
 
-This is the implementation in Python of a propagation model that we propose to call *CAST* as *Cell Agent State Transitions*. Its purpose is modeling the propagation of epidemics and the impact of actions to counter it.
+This is the implementation in Python of a propagation model that we propose to call *CAST* as *Cell Agent State Transitions*. Its purpose is modeling the propagation of epidemics and the impact of actions to counter it. See [medium article](https://medium.com/@manuel.capel_60823/cast-model-for-epidemics-simulation-6091f70b7fc4).
 
 [:fr:](https://gist.github.com/Helmasaur/fb8ca2c08131c58341d443b43672a1f5) For French, see this [blog article](https://blog.parcoor.com/2020-04-22-cast-prediction-propagation/)
 
