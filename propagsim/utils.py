@@ -40,6 +40,7 @@ def get_move_proba_matrix(pos_cells_arr, pos_agents_arr, attractivity_arr):
     """
     mat = 1 / cdist(pos_cells_arr, pos_agents_arr, 'euclidean')
     mat[isinf(mat)] = 0  # zero probability to move to the same place (where 1/dist is inf)
+    mat[mat > 1] = 1  # to not overly favor cells very close to home cell
     mat *= attractivity_arr[:, None]  # col-wise multiplication
     mat /= norm(mat, ord=1, axis=0, keepdims=True)  # nor each col s.t. sums up to 1 (proba repartition)
     return mat
