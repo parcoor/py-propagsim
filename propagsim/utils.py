@@ -1,5 +1,6 @@
-from numpy import isinf
+from numpy import isinf, array, zeros, arange
 from numpy.linalg import norm
+from numpy.random import rand
 from scipy.spatial.distance import cdist
 import warnings
 
@@ -40,7 +41,26 @@ def get_move_proba_matrix(pos_cells_arr, pos_agents_arr, attractivity_arr):
     """
     mat = 1 / cdist(pos_cells_arr, pos_agents_arr, 'euclidean')
     mat[isinf(mat)] = 0  # zero probability to move to the same place (where 1/dist is inf)
-    mat[mat > 1] = 1  # to not overly favor cells very close to home cell
     mat *= attractivity_arr[:, None]  # col-wise multiplication
     mat /= norm(mat, ord=1, axis=0, keepdims=True)  # nor each col s.t. sums up to 1 (proba repartition)
     return mat
+
+
+def vectorized_choice(prob_matrix, axis=1):
+    """ 
+    selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise 
+    see https://stackoverflow.com/questions/34187130/fast-random-weighted-selection-across-all-rows-of-a-stochastic-matrix
+    """
+    s = prob_matrix.cumsum(axis=1)
+    r = rand(prob_matrix.shape[0])
+    k = (s < r).sum(axis=1)
+    return k
+
+def np_one_hot_encode(a):
+    """
+    one-hot encoding of np.array `a`
+    see: https://stackoverflow.com/questions/29831489/convert-array-of-indices-to-1-hot-encoded-numpy-array
+    """
+    b = zeros((a.size, a.max() + 1))
+    b[arange(a.size),a] = 1
+    return b

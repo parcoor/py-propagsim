@@ -1,7 +1,7 @@
 from numpy.random import choice, uniform
-from numpy import array, concatenate, where
+from numpy import array, concatenate, where, argmax, copy, multiply, max
 from itertools import compress
-from propagsim.utils import get_least_severe_state, get_move_proba_matrix
+from propagsim.utils import get_least_severe_state, get_move_proba_matrix, vectorized_choice, np_one_hot_encode
 from multiprocessing import Pool, cpu_count
 
 
@@ -232,21 +232,20 @@ class Cell:
         """ update the state of the agent in the cell by activing contagion. The probability for an agent to get infected is:
         (greatest contagiousity among agents in cell) * (sensitivity of agent)
         """
-        most_contagious_agent = None
-        for agent in self.agents:
-            if (most_contagious_agent is None or 
-                    agent.get_state().get_contagiousity() > most_contagious_agent.get_state().get_contagiousity()):
-                most_contagious_agent = agent
-        greatest_contagiousity = most_contagious_agent.get_state().get_contagiousity()
-        if greatest_contagiousity == 0: 
-            return  # no update if no agent in the cell is contagious
-        for agent in self.agents:  # unnecessary to parallelize, there shouldn't be too many agents in a single cell
-            proba_infection = greatest_contagiousity * agent.get_state().get_sensitivity() * self.unsafety
-            draw = uniform()
-            if draw < proba_infection:
-                newly_infected = agent.get_infected()
-                if newly_infected:
-                    most_contagious_agent.append_contaminated(agent.get_id())
+        contagiousity_agents = array([agent.get_state().get_contagiousity() for agent in self.agents])
+        greatest_contagiousity = max(contagiousity_agents)
+        most_contagious_agent = self.agents[argmax(contagiousity_agents)]
+        if greatest_contagiousity == 0:
+            return 
+        sensitivity_agents = array([agent.get_state().get_sensitivity() for agent in self.agents])
+        probas_infection = self.unsafety * greatest_contagiousity * sensitivity_agents
+        draws = uniform(size=probas_infection.shape[0])
+        inds_agents_to_infect = where(probas_infection > draws)[0]
+        for ind in inds_agents_to_infect:
+            if self.agents[ind].get_infected():
+                most_contagious_agent.append_contaminated(ind)
+
+
 
     def add_agent(self, agent, update=True):
         """ add `agent` to the cell. `update`: if to proceed to contagion within the cell or not. """
@@ -291,6 +290,17 @@ class Map:
         self.attractivity_arr = array([cell.get_attractivity() for cell in cells])
 
         self.move_proba_matrix = get_move_proba_matrix(self.pos_cells_arr, self.pos_agents_arr, self.attractivity_arr)
+        self.unsafety_cells = array([cell.get_unsafety() for cell in cells])
+        self.p_moves = array([agent.get_p_move() for agent in agents])
+        self.severities = array([agent.get_state().get_severity() for agent in agents])
+        self.infectabilities = self.severities > 0
+        self.sensitivities = array([agent.get_sensitivity() for agent in agents])
+        self.contagiousities = array([agent.get_contagiousity() for agent in agents])
+        self.probas_move = self.p_moves * (1 - self.severities)
+        self.home_cell_ids = array([agent.get_home_cell_id() for agent in agents])
+        self.current_state_ids = array([agent.get_state().get_id() for agent in agents])
+        self.least_state_ids = array([agent.get_least_severe_state().get_id() for agent in agents])
+        self.current_state_durations = array([0] * self.n_agents)
 
 
     def get_agent(self, id):
@@ -335,18 +345,28 @@ class Map:
         it's considered to return (or stay) home during this move """
         # Select agents who make a move
         draw = uniform()
-        probas_move = array([(agent.get_p_move() * (1 - agent.get_state().get_severity())) for agent in self.agents])
-        inds_agents2move = where(probas_move >= draw)[0]
+        inds_agents2move = where(self.probas_move >= draw)[0]
         if self.verbose >= 1:
             print(f'INFO: {inds_agents2move.shape[0]} selected for move')
+        # Move agents selected agents (the others go/stay in their home cell)
+        probas_new_cell = self.move_proba_matrix[:, inds_agents2move]
+        new_cell_ids = vectorized_choice(probas_new_cell)
+        current_agent_cells = copy(self.home_cell_ids)
+        current_agent_cells[inds_agents2move] = new_cell_ids
+        # contamination process
+        current_agent_cells_one_hot = np_one_hot_encode(current_agent_cells)
+        arr_contagiousity = repeat(self.contagiousities, current_agent_cells.shape[1], axis=1)
+        arr_contagiousity = multiply(current_agent_cells, arr_contagiousity)
+        max_contagiousities = max(arr_contagiousity, axis=1)
+        max_contagiousities = max_contagiousities[current_agent_cells]  # max contagiousity by agent in their current cell 
+        unsafeties = self.unsafety_cells[current_agent_cells]  # by agent, unsafety of their current cell
 
-        for i in inds_agents2move:
-            self.move_single_agent(i)
-        
-        # Move back home agents who didn't move
-        inds_agents2home = list(set(list(range(self.n_agents))) - set(inds_agents2move))
-        for i in inds_agents2home:
-            self.move_home_ind(i)
+        probas_infection = unsafeties * max_contagiousity * self.sensitivities
+        draws = uniform(size=probas_infection.shape[0])
+        inds_agents_to_infect = where((probas_infection > draws) & self.infectabilities)[0]
+        # Infect contaminated agents
+        self.current_state_ids[inds_agents_to_infect] = self.least_state_ids[inds_agents_to_infect]
+        self.infectabilities[inds_agents_to_infect] = False  # agents no anymore infectable once infected
 
 
     def all_home(self):
@@ -357,6 +377,9 @@ class Map:
 
     def forward_all_cells(self):
         """ move all agents in map one time step forward """
+        self.state_durations += 1
+
+
         for agent in self.agents:
             agent.forward()
         # Update R coeff after a global forward
