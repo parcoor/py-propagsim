@@ -1,6 +1,6 @@
 import numpy as np
 from itertools import compress
-from propagsim.utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice
+from utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice
 from multiprocessing import Pool, cpu_count
 
 
@@ -43,7 +43,6 @@ class Agent:
         self.durations = durations
         self.current_state = current_state
         self.home_cell_id = home_cell_id
-        self.infectability = infectability
         self.least_state, self.least_state_duration = get_least_severe_state(states, durations)
 
     def get_id(self):
@@ -67,14 +66,25 @@ class Agent:
     def set_transitions(self, transitions):
         self.transitions = transitions
 
+    def get_transitions_id(self):
+        return self.transitions.get_id()
+
+    def get_transitions_arr(self):
+        return self.transitions.get_arr()
+
     def get_durations(self):
         return self.durations
 
     def set_durations(self, durations):
         self.durations = durations
 
-    def get_current_state(self):
-        return self.get_current_state
+    def get_current_state_id(self):
+        return self.current_state.get_id()
+
+    def get_current_state_duration(self):
+        for i, state in enumerate(self.states):
+            if state.get_id() == self.current_state.get_id():
+                return self.durations[i]
 
     def set_current_state(self, current_state):
         self.current_state = current_state
@@ -88,8 +98,20 @@ class Agent:
     def get_least_state(self):
         return self.least_state
 
+    def get_least_state_id(self):
+        return self.least_state.get_id()
+
     def get_least_state_duration(self):
-        return self-least_state_duration
+        return self.least_state_duration
+
+    def get_contagiousity(self):
+        return self.current_state.get_contagiousity()
+
+    def get_sensitivity(self):
+        return self.current_state.get_sensitivity()
+
+    def get_severity(self):
+        return self.current_state.get_severity()
 
 
 
@@ -151,7 +173,7 @@ class Cell:
 
         
 class Map:
-    def __init__(self, cells, agents, width_square=1, current_periode=0, verbose=0):
+    def __init__(self, cells, agents, width_square=1, current_period=0, verbose=0):
         """ A map contains a list of `cells`, `agents` and an implementation of the 
         way agents can move from a cell to another.
         """
@@ -162,23 +184,21 @@ class Map:
         for cell in cells:
             self.cell_ids.append(cell.get_id())
             coords = cell.get_position()
-            self.xcoords.append(coords[0])
-            self.ycoords.append(coords[0])
-            self.attractivities.append(cell.get_attractivity())
+            xcoords.append(coords[0])
+            ycoords.append(coords[0])
+            attractivities.append(cell.get_attractivity())
             self.unsafeties.append(cell.get_unsafety())
 
+        self.cell_ids = np.array(self.cell_ids, dtype=np.uint32)
         xcoords, y_coords = np.array(xcoords, dtype=np.float32), np.array(ycoords, dtype=np.float32)
         attractivities = np.array(attractivities, dtype=np.float32)
         self.unsafeties = np.array(self.unsafeties, dtype=np.float32)
         # 
         coords_squares, square_ids_cells = squarify(xcoords, ycoords, width_square)
-        self.square_sampling_probas = get_square_sampling_probas(self.attractivity_cells_arr, 
-                                                                                self.square_ids_cells, 
-                                                                                self.coords_squares, 
-                                                                                intra_square_dist=width_square/2)
+        self.square_sampling_probas = get_square_sampling_probas(attractivities, square_ids_cells, coords_squares, width_square/2)
 
-        mask_eligible = (attractivities > 0)  # only cells with attractivity > 0 are eligible for a move
-        self.eligible_cells = cell_ids[mask_eligible]
+        mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
+        self.eligible_cells = self.cell_ids[mask_eligible]
         self.cell_sampling_probas = get_cell_sampling_probas(attractivities[mask_eligible], square_ids_cells[mask_eligible])
 
         self.agent_ids = []
@@ -186,7 +206,6 @@ class Map:
         self.severities = []
         self.sensitivities = []
         self.contagiousities = []
-        self.infectabilities = []
         # per agent
         self.least_state_ids = []  
         self.least_state_duration = []
@@ -206,11 +225,10 @@ class Map:
         
         for agent in agents:
             self.agent_ids.append(agent.get_id())
-            self.p_moves.append(agent.get_p_move)
-            self.severities.append(agent.get_state().get_severity())
+            self.p_moves.append(agent.get_p_move())
+            self.severities.append(agent.get_severity())
             self.sensitivities.append(agent.get_sensitivity())
             self.contagiousities.append(agent.get_contagiousity())
-            self.infectabilities.append(agent.get_infectability())
             least_state_id = agent.get_least_state_id()
             self.least_state_ids.append(least_state_id)
             if least_state_id not in unique_least_state_ids:
@@ -221,39 +239,39 @@ class Map:
                 unique_least_state_ids.append(least_state_id)
             self.least_state_durations.append(agent.get_least_state_duration())
             self.home_cell_ids.append(agent.get_home_cell_id())
-            self.current_state_ids.append(agent.get_current_state().get_id())
+            self.current_state_ids.append(agent.get_current_state_id())
             self.current_state_durations.append(agent.get_current_state_duration())
-            if transition_id not in self.transitions_ids:
-                self.transitions_ids.append(transition_id)
-                self.transitions.append(agent.get_transitions().get_arr())
+            transitions_id = agent.get_transitions_id()
+            if transitions_id not in self.transitions_ids:
+                self.transitions_ids.append(transitions_id)
+                self.transitions.append(agent.get_transitions_arr())
             self.durations.append(np.array(agent.get_durations(), dtype=np.float32))
-            self.n_infected_period += int(agent.get_state().get_severity() > 0)
+            self.n_infected_period += int(agent.get_severity() > 0)
 
         self.agent_ids = np.array(self.agent_ids, dtype=np.float32)
-        self.p_move = np.array(self.p_move, dtype=np.float32)
+        self.p_moves = np.array(self.p_moves, dtype=np.float32)
         self.severities = np.array(self.severities, dtype=np.float32)
         self.sensitivities = np.array(self.sensitivities, dtype=np.float32)
         self.contagiousities = np.array(self.contagiousities, dtype=np.float32)
-        self.infectabilities =  np.array(self.infectabilities, dtype=np.float32)
-        self.least_state_ids = np.array(self.least_state_ids, dtype=uint8)
+        self.least_state_ids = np.array(self.least_state_ids, dtype=np.uint8)
         self.least_state_severities = np.array(self.least_state_severities, dtype=np.float32)
         self.least_state_contagiousities = np.array(self.least_state_contagiousities)
         self.least_state_sensitivities = np.array(self.least_state_sensitivities)
         self.least_state_durations = np.array(self.least_state_durations, dtype=np.float32)
         self.home_cell_ids = np.array(self.home_cell_ids, dtype=np.uint32)
-        self.current_state_ids = np.array(self.current_state_ids, dtype=uint8)  # no more than 255 possible states
+        self.current_state_ids = np.array(self.current_state_ids, dtype=np.uint8)  # no more than 255 possible states
         self.current_state_durations = np.array(self.current_state_durations, dtype=np.float32)
-        self.transitions_ids = np.array(self.transitions_ids, dtype=uint8)  # no more than 255 possible transitions
+        self.transitions_ids = np.array(self.transitions_ids, dtype=np.uint8)  # no more than 255 possible transitions
         # Re-order transitions by ids
         order = np.argsort(self.transitions_ids)
         self.transitions_ids = self.transitions_ids[order]
         self.transitions = np.dstack(self.transitions)
         self.transitions = self.transitions[:,:, order]
-        self.durations = vstack(self.durations)
+        self.durations = np.vstack(self.durations)
         # Compute probas_move for agent selection
         self.probas_move = self.p_moves * (1 - self.severities)
         # Define variable for monitoring the propagation (r factor, contagion chain)
-        self.r_factors = array([])
+        self.r_factors = np.array([])
         # TODO: Contagion chains
         # Define arrays for agents state transitions
         self.infecting_agents, self.infected_agents, self.infected_periods = np.array([]), np.array([]), np.array([])
