@@ -15,24 +15,24 @@ def get_least_severe_state(states, durations):
     for state in states:
         ids.append(state.get_severity())
         severities.append(state.get_severity())
-    ids, severities = np.array(ids), no.array(severities)
+    ids, severities = np.array(ids), np.array(severities)
     ind_min = np.argmin(severities)
     return states[ind_min], durations[ind_min]
 
 
 def squarify(xcoords, ycoords, width_square):
-    xcoords_square = (xcoords / width_square).astype(np.int32)
-    ycoords_square = (ycoords / width_square).astype(np.int32)
-    coords_squares = np.array(np.meshgrid(xcoords_square, ycoords_square)).T.reshape(-1,2)
-    coords_squares += width_square / 2
+    xcoords_square = np.divide(xcoords, width_square).astype(np.int32)
+    ycoords_square = np.divide(ycoords, width_square).astype(np.int32)
+    coords_squares = np.vstack((xcoords_square, ycoords_square)).T
+    coords_squares = np.add(coords_squares, width_square / 2)
     square_ids_cells = np.arange(0, coords_squares.shape[0])
-    coords_squares = np.unique(coords_squares, axis=0)
+    coords_squares, square_ids_cells = np.unique(coords_squares, return_inverse=True,  axis=0)
     return coords_squares, square_ids_cells
 
 
 def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squares, intra_square_dist=.5):
     # compute sum attractivities in squares
-    sum_attractivity_squares, unique_squares = sum_by_group(values=self.attractivity_cells_arr, groups=square_ids_cells)
+    sum_attractivity_squares, unique_squares = sum_by_group(values=attractivity_cells, groups=square_ids_cells)
     # Compute distances between all squares and squares having sum_attractivity > 0
     eligible_squares = unique_squares[sum_attractivity_squares > 0]
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
@@ -52,7 +52,7 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
     # `counts`: number of cells for each square
     width_sample = np.max(counts)
     square_ids_cells = square_ids_cells[inverse]
-    attractivity_cells = attractivity_cells_arr[inverse]
+    attractivity_cells = attractivity_cells[inverse]
     # Create a new square index and align it with the cells to get right cell <=> square mapping
     new_square_ids = np.arange(0, counts.shape[0])
     new_square_ids = np.repeat(new_square_ids, counts)
@@ -60,12 +60,12 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
     # 1, 2, 3... for the cells in the first square, then 1, 2, .. for the cells in the second square
     # Trick: 1. shift `counts` one to the right, remove last element and append 0 at the beginning:
     cell_index_shift = np.insert(counts, 0, 0)[:-1]
-    cell_index_shift = np.cumsum(to_repeat)  # [0, ncells in square0, ncells in square 1, etc...]
+    cell_index_shift = np.cumsum(cell_index_shift)  # [0, ncells in square0, ncells in square 1, etc...]
     to_subtract = np.repeat(cell_index_shift, counts)  # repeat each element as many times as the corresponding square has cells
-    inds_cells_in_square = np.arange(0, cells.shape[0])
+    inds_cells_in_square = np.arange(0, attractivity_cells.shape[0])
     inds_cells_in_square = np.subtract(inds_cells_in_square, to_subtract)  # we have the right sequential order
     # Create `sample_arr`: one row for each square. The values first value in each row are the attractivity of its cell. Padded with 0.
-    cell_sampling_probas = np.zeros((n_squares, width_sample))
+    cell_sampling_probas = np.zeros((unique_square_ids.shape[0], width_sample))
     cell_sampling_probas[new_square_ids, inds_cells_in_square] = attractivity_cells
     # Normalize the rows of `sample_arr` s.t. the rows are probability distribution
     cell_sampling_probas /= np.linalg.norm(cell_sampling_probas, ord=1, axis=1, keepdims=True).astype(np.float32)
