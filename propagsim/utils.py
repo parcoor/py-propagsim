@@ -11,13 +11,12 @@ warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 def get_least_severe_state(states, durations):
     """ Get the state that has the least severity > 0 """
-    ids, severities = [], []
-    for state in states:
-        ids.append(state.get_severity())
-        severities.append(state.get_severity())
-    ids, severities = np.array(ids), np.array(severities)
-    ind_min = np.argmin(severities)
-    return states[ind_min], durations[ind_min]
+    least_severity, least_severe_duration, least_severe_state = 1, 0, None
+    for state, duration in zip(states, durations):
+        severity = state.get_severity()
+        if severity < least_severity and severity > 0:
+            least_severe_state , least_severe_duration = state, duration
+    return state, duration
 
 
 def squarify(xcoords, ycoords, width_square):
@@ -53,7 +52,8 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
 
 
 def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
-    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_counts=True, return_inverse=True)
+    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)  # inverse??
+    # order = np.argsort(square_ids_cells)
     # `unique_square_ids` is sorted #
     width_sample = np.max(counts)
     # create a sequential index dor the cells in the squares: 
@@ -64,7 +64,7 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
     to_subtract = np.repeat(cell_index_shift, counts)  # repeat each element as many times as the corresponding square has cells
     inds_cells_in_square = np.arange(0, attractivity_cells.shape[0])
     inds_cells_in_square = np.subtract(inds_cells_in_square, to_subtract)  # we have the right sequential order
-    inds_cells_in_square = inds_cells_in_square[inverse]
+    inds_cells_in_square = inds_cells_in_square[inverse]  
     # Now `inds_cells_in_square` is a seq. aligned with `attractivity_cells` and `square_id_cells` describing the index of each cell
     # within the square it belongs to
     
