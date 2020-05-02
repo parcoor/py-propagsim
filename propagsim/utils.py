@@ -25,8 +25,8 @@ def squarify(xcoords, ycoords, width_square):
     ycoords_square = np.divide(ycoords, width_square).astype(np.int32)
     coords_squares = np.vstack((xcoords_square, ycoords_square)).T
     coords_squares = np.add(coords_squares, width_square / 2)
-    square_ids_cells = np.arange(0, coords_squares.shape[0])
     coords_squares, square_ids_cells = np.unique(coords_squares, return_inverse=True,  axis=0)
+    coords_squares = np.multiply(coords_squares, width_square)
     return coords_squares, square_ids_cells
 
 
@@ -34,11 +34,16 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
     # compute sum attractivities in squares
     sum_attractivity_squares, unique_squares = sum_by_group(values=attractivity_cells, groups=square_ids_cells)
     # Compute distances between all squares and squares having sum_attractivity > 0
-    eligible_squares = unique_squares[sum_attractivity_squares > 0]
+    mask_attractivity = (sum_attractivity_squares > 0)
+    eligible_squares = unique_squares[mask_attractivity]
+    sum_attractivity_squares = sum_attractivity_squares[mask_attractivity]
+    order = np.argsort(eligible_squares)
+    eligible_squares = eligible_squares[order]
+    sum_attractivity_squares = sum_attractivity_squares[order]
+
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
     inter_square_dists = cdist(coords_squares, coords_squares[eligible_squares,:], 'euclidean').astype(np.float32)
     inter_square_dists = np.add(inter_square_dists, intra_square_dist)  # add .5: average distance intra square
-    inter_square_dists = inter_square_dists[:,unique_squares]
     # Compute probability of sampling each square
     square_sampling_probas = 1 / inter_square_dists
     square_sampling_probas *= sum_attractivity_squares[None,:]  # row-wise multiplication
@@ -48,14 +53,9 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
 
 
 def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
-    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)
-    # `counts`: number of cells for each square
+    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_counts=True, return_inverse=True)
+    # `unique_square_ids` is sorted #
     width_sample = np.max(counts)
-    square_ids_cells = square_ids_cells[inverse]
-    attractivity_cells = attractivity_cells[inverse]
-    # Create a new square index and align it with the cells to get right cell <=> square mapping
-    new_square_ids = np.arange(0, counts.shape[0])
-    new_square_ids = np.repeat(new_square_ids, counts)
     # create a sequential index dor the cells in the squares: 
     # 1, 2, 3... for the cells in the first square, then 1, 2, .. for the cells in the second square
     # Trick: 1. shift `counts` one to the right, remove last element and append 0 at the beginning:
@@ -64,12 +64,17 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
     to_subtract = np.repeat(cell_index_shift, counts)  # repeat each element as many times as the corresponding square has cells
     inds_cells_in_square = np.arange(0, attractivity_cells.shape[0])
     inds_cells_in_square = np.subtract(inds_cells_in_square, to_subtract)  # we have the right sequential order
+    inds_cells_in_square = inds_cells_in_square[inverse]
+    # Now `inds_cells_in_square` is a seq. aligned with `attractivity_cells` and `square_id_cells` describing the index of each cell
+    # within the square it belongs to
+    
     # Create `sample_arr`: one row for each square. The values first value in each row are the attractivity of its cell. Padded with 0.
     cell_sampling_probas = np.zeros((unique_square_ids.shape[0], width_sample))
-    cell_sampling_probas[new_square_ids, inds_cells_in_square] = attractivity_cells
+    cell_sampling_probas[square_ids_cells, inds_cells_in_square] = attractivity_cells
     # Normalize the rows of `sample_arr` s.t. the rows are probability distribution
     cell_sampling_probas /= np.linalg.norm(cell_sampling_probas, ord=1, axis=1, keepdims=True).astype(np.float32)
     return cell_sampling_probas, cell_index_shift
+
 
 
 def vectorized_choice(prob_matrix, axis=1):
