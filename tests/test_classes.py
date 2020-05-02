@@ -1,131 +1,179 @@
-from propagsim.classes import State, Agent, Cell, Map
-from propagsim.utils import get_least_severe_state, get_move_proba_matrix
-from numpy import array, min, max, sum
-from itertools import chain
+from classes import State, Agent, Cell, Transitions, Map
+import numpy as np
+from time import time
 
 
-"""
-Test1: contagions
-Simulation with 2 agents in the same cell who can be in 2 distinct states: 'healthy' or 'sick'.
-Those agents have distinct durations `durations_1` and `durations_2` attached to those states.
-After one step, agent 1 gets sick. He contaminates agent 2. Then both get healthy again after different durations
-"""
+def get_alpha_beta(min_value, max_value, mean_value):
+    """ for the duration on a state, draw from a beta distribution with parameter alpha and beta """
+    x = (mean_value - min_value) / (max_value - min_value)
+    z = 1 / x - 1
+    a, b = 2, 2 * z
+    return a, b
+
+
+def draw_beta(min_value, max_value, mean_value, n_values, round=False):
+    """ draw `n_values` values between `min_value` and `max_value` having 
+    `mean_value` as (asymptotical) average"""
+    a, b = get_alpha_beta(min_value, max_value, mean_value)
+    durations = np.random.beta(a, b, n_values) * (max_value - min_value) + min_value
+    if round:
+        durations = np.around(durations)
+    return durations.reshape(-1, 1)
+
+# =========== States ==============
 
 state0 = State(id=0, name='healthy', contagiousity=0, sensitivity=1, severity=0)
-state1 = State(id=1, name='sick', contagiousity=1, sensitivity=0, severity=0.5)
+state1 = State(id=1, name='asymptomatic', contagiousity=.8, sensitivity=0, severity=0.1)
+state2 = State(id=2, name='mild', contagiousity=.6, sensitivity=0, severity=0.8)
+state3 = State(id=3, name='hospital', contagiousity=.1, sensitivity=0, severity=1)
+state4 = State(id=4, name='reanimation', contagiousity=.05, sensitivity=0, severity=1)
+state5 = State(id=5, name='dead', contagiousity=0, sensitivity=0, severity=1)
+state6 = State(id=6, name='recovered', contagiousity=0, sensitivity=0, severity=0)
+
+states = [state0, state1, state2, state3, state4, state5, state6]
+id2state = {state.get_id(): state.get_name() for state in states}
+
+# ========= Transitions ==========
+
+# For people younger than 15yo
+transitions_15 = Transitions(0, np.array([[1, 0, 0, 0, 0, 0, 0], 
+                                     [0, 0, 0.5, 0, 0, 0, 0.5], 
+                                     [0, 0, 0, 0.3, 0, 0, 0.7],
+                                     [0, 0, 0, 0, 0.3, 0, 0.7],
+                                     [0, 0, 0, 0, 0, 0.5, 0.5],
+                                     [0, 0, 0, 0, 0, 1, 0],
+                                     [0, 0, 0, 0, 0, 0, 1]]))
+
+# For people younger between 15 and 44yo
+transitions_15_44 = Transitions(1, np.array([[1, 0, 0, 0, 0, 0, 0], 
+                                         [0, 0, 0.5, 0, 0, 0, 0.5], 
+                                         [0, 0, 0, 0.3, 0, 0, 0.7],
+                                         [0, 0, 0, 0, 0.3, 0, 0.7],
+                                         [0, 0, 0, 0, 0, 0.5, 0.5],
+                                         [0, 0, 0, 0, 0, 1, 0],
+                                         [0, 0, 0, 0, 0, 0, 1]]))
+
+# For people younger between 45 and 64yo
+transitions_45_64 = Transitions(2, np.array([[1, 0, 0, 0, 0, 0, 0], 
+                                         [0, 0, 0.5, 0, 0, 0, 0.5], 
+                                         [0, 0, 0, 0.3, 0, 0, 0.7],
+                                         [0, 0, 0, 0, 0.3, 0, 0.7],
+                                         [0, 0, 0, 0, 0, 0.5, 0.5],
+                                         [0, 0, 0, 0, 0, 1, 0],
+                                         [0, 0, 0, 0, 0, 0, 1]]))
+
+# For people younger between 65 and 75yo
+transitions_65_74 = Transitions(3, np.array([[1, 0, 0, 0, 0, 0, 0], 
+                                         [0, 0, 0.5, 0, 0, 0, 0.5], 
+                                         [0, 0, 0, 0.3, 0, 0, 0.7],
+                                         [0, 0, 0, 0, 0.3, 0, 0.7],
+                                         [0, 0, 0, 0, 0, 0.5, 0.5],
+                                         [0, 0, 0, 0, 0, 1, 0],
+                                         [0, 0, 0, 0, 0, 0, 1]]))
+
+# For people younger >= 75yo
+transitions_75 = Transitions(4, np.array([[1, 0, 0, 0, 0, 0, 0], 
+                                     [0, 0, 0.5, 0, 0, 0, 0.5], 
+                                     [0, 0, 0, 0.3, 0, 0, 0.7],
+                                     [0, 0, 0, 0, 0.3, 0, 0.7],
+                                     [0, 0, 0, 0, 0, 0.5, 0.5],
+                                     [0, 0, 0, 0, 0, 1, 0],
+                                     [0, 0, 0, 0, 0, 0, 1]]))
+
+transitions = [transitions_15, transitions_15_44, transitions_45_64, transitions_65_74, transitions_75]
 
 
-transitions = array([[1, 0], [1, 0]])
-states = [state0, state1]
 
-least_severe_state = get_least_severe_state([state0, state1])
-validated = 'OK' if least_severe_state.get_id() == state1.get_id() else 'Failed'
-print(f'Check for least_severe_state: {validated}')
+# =========== Agents ================
 
-durations_1 = (-1, 3)  # 1st state duration: undefinite, 2nd state duration: 3 timesteps (days)
-durations_2 = (-1, 2)  # 1st state duration: undefinite, 2nd state duration: 2 timesteps (days)
-p_move_1 = 0.3
-p_move_2 = 0.5
+N_AGENTS = 1000
 
-ind_1 = Agent(id=1, p_move=p_move_1, transitions=transitions, states=states, durations=durations_1, current_state=state0, home_cell_id=1)
-ind_2 = Agent(id=2, p_move=p_move_2, transitions=transitions, states=states, durations=durations_2, current_state=state0, home_cell_id=1)
+prop_population = [.17, .35, .3, .1, .08]
+draw_transitions = np.random.choice(range(len(transitions)), N_AGENTS, p=prop_population)
 
-position_1 = (1, 1)
-attractivity_1 = 0.5
-cell_1 = Cell(id=1, position=position_1, attractivity=attractivity_1, unsafety=1, agents=[ind_1, ind_2])
+AVG_AGENTS_HOME = 2.2
 
-for i in range(6):
-    ind_1.forward()
-    ind_2.forward()
-    if i == 1:
-        ind_1.set_state(state1)  # `ind_1` gets in state 'sick'
-        cell_1.update_agent_states()  # agents in the same cell than `ind_1` get also eventually infected
-    validated_1 = ('OK' if ((i == 0 or i > 3) and ind_1.get_state().get_name() == state0.get_name()) or 
-                    (1 <= i <= 3 and ind_1.get_state().get_name() == state1.get_name())
-                    else 'Failed')
-    validated_2 = ('OK' if ((i == 0 or i > 2) and ind_2.get_state().get_name() == state0.get_name()) or 
-                    (1 <= i <= 2 and ind_2.get_state().get_name() == state1.get_name())
-                    else 'Failed')
-    print(f'step {i}, state ind_1: {ind_1.get_state()}: {validated_1}, state ind_2: {ind_2.get_state()}: {validated_2}')
+n_home_cells = int(N_AGENTS / AVG_AGENTS_HOME)
+draw_home_cells = np.random.choice(range(n_home_cells), N_AGENTS)
+p_moves = draw_beta(0, 1, .5, N_AGENTS)
+
+durations_healthy = durations_dead = durations_recovered = np.ones(shape=(N_AGENTS, 1)) * -1
+durations_asymptomatic = draw_beta(1, 14, 5, N_AGENTS, True)
+durations_mild = draw_beta(5, 10, 7, N_AGENTS, True)
+durations_hospital = draw_beta(1, 8, 4, N_AGENTS, True)
+durations_reanimation = draw_beta(15, 30, 21, N_AGENTS, True)
+
+durations = [durations_healthy, durations_asymptomatic, durations_mild, 
+             durations_hospital, durations_reanimation, durations_dead, durations_recovered]
+
+durations = np.concatenate(durations, axis=1)
+
+agents = []
+for i in range(N_AGENTS):
+    agent = Agent(id=i, p_move=p_moves[i], 
+                  transitions=transitions[draw_transitions[i]], 
+                  states=states, 
+                  durations=durations[i,:].flatten(), 
+                  current_state=state0, 
+                  home_cell_id=draw_home_cells[i])
+    agents.append(agent)
 
 
-"""
-Test 2: get_move_proba_matrix()
-This function is critical for correctly omputing moves.
-It returns a matrix where each row corresponds to a cell a each colum to an agent
-Each column represents the probability repartition over the cells for a next move (if one happens).
-Therefore each column should 1. contain only positive values, 2. sum up to 1 and 3. have probability 0 for the current cell of the agent
-(as we assume that if an agent moves, then only to a cell different of it current one)
-"""
-# First we add 2 more agents and cells
-durations_3 = (-1, 4)  # 1st state duration: undefinite, 2nd state duration: 3 timesteps (days)
-durations_4 = (-1, 1)  # 1st state duration: undefinite, 2nd state duration: 2 timesteps (days)
-p_move_3 = 0.2
-p_move_4 = 0.9
+# ========== Cells ==============
 
-ind_3 = Agent(id=3, p_move=p_move_3, transitions=transitions, states=states, durations=durations_3, current_state=state0, home_cell_id=2)
-ind_4 = Agent(id=4, p_move=p_move_4, transitions=transitions, states=states, durations=durations_4, current_state=state0, home_cell_id=3)
+N_CELLS = int(1.1 * n_home_cells)
 
-position_2, position_3 = (1, 4), (2, 2)
-cell_2 = Cell(id=2, position=position_2, attractivity=attractivity_1, unsafety=1, agents=[ind_3])
-cell_3 = Cell(id=3, position=position_3, attractivity=attractivity_1, unsafety=1, agents=[ind_4])
+positions_x = np.random.uniform(low=0, high=10, size=N_CELLS).reshape(-1, 1)
+positions_y = np.random.uniform(low=0, high=10, size=N_CELLS).reshape(-1, 1)
+positions = np.concatenate([positions_x, positions_y], axis=1)
 
-cells = [cell_1, cell_2, cell_3]
-agents = [ind_1, ind_2, ind_3, ind_4]
-id2cell = {cell.get_id(): cell for cell in cells}
-id2agents = {agent.get_id(): agent for agent in agents}
+attractivities = np.random.uniform(size=N_CELLS)
+attractivities[:n_home_cells] = 0
 
-pos_agents_arr = array([id2cell.get(ind.get_home_cell_id()).get_position() for ind in agents])
-pos_cells_arr = array([cell.get_position() for cell in cells])
-attractivity_arr = array([cell.get_attractivity() for cell in cells])
+unsafeties = np.random.uniform(size=N_CELLS)
+unsafeties[:n_home_cells] = 1
 
-move_proba_matrix = get_move_proba_matrix(pos_cells_arr, pos_agents_arr, attractivity_arr)
+cells = []
+for i in range(N_CELLS):
+    cell = Cell(id=i, 
+                position=positions[i,:].flatten(), 
+                attractivity=attractivities[i], 
+                unsafety=unsafeties[i])
+    cells.append(cell)
 
-# 1. Check all values are positive
-validated = 'OK' if min(move_proba_matrix) >= 0 else 'Failed'
-print(f'Check for only positive values in move_proba_matrix: {validated}')
 
-# 2. Check all columns sum up to 1
-sumcols = sum(move_proba_matrix, axis=0)
-validated = 'OK' if (min(sumcols) == 1 and max(sumcols) == 1) else 'Failed'
-print(f'Check for all columns in move_proba_matrix summing up to 1: {validated}')
+# =========== Map =============
 
-# 3. Check the current (home) cell has proba zero
-cellid2ind = {cell.get_id(): i for i, cell in enumerate(cells)}
-validated = 'OK'
-for i, agent in enumerate(agents):
-    if move_proba_matrix[cellid2ind.get(agent.get_current_cell_id()), i] != 0:
-        validated = 'Failed'
-        break
-print(f'Check for move_proba_matrix 0 for current cells: {validated}')
+map = Map(cells, agents, states, verbose=2)
 
-"""
-Test 3: Map
-Create a map with the `agents` and `cells` defined above
-1. Check that after a move there are no duplicated agents
-2. Check that after `all_home()` the cells have the same agents than at the beginning
-"""
+n_infected_agents_start = 100
+infected_agent_id = np.random.choice(range(N_AGENTS), size=n_infected_agents_start, replace=False)
+new_state_id = 1
 
-map = Map(cells, agents, possible_state_ids=(0, 1))
-repartition_0 = map.get_repartition()
-# 1. Check there is no duplicate agent
-map.make_move()
-repartition_1 = map.get_repartition()
-agent_list = list(chain.from_iterable(repartition_1.values()))
-validated = 'OK' if (len(agent_list) == len(list(set(agent_list))) and len(agent_list) == len(agents)) else 'Failed'
-print(f'Check for no duplicated agents after move in map: {validated}')
+print(f'Injecting {n_infected_agents_start} contaminated agents out of {N_AGENTS} in map')
 
-# 2. Check the state after calling `all_home()` is same as the initial state
-map.all_home()
-repartition_2 = map.get_repartition()
-validated = 'OK'
-for cell_id, agents_cell in repartition_0.items():
-    if len(repartition_2.get(cell_id)) != len(agents_cell) or set(repartition_2.get(cell_id)) != set(agents_cell):
-        validated = 'Failed'
-        break
-print(f'Check for return to initial state after `all_home()`: {validated}')
+map.change_state_agents(np.array([infected_agent_id]), np.array([new_state_id]))
 
-# 3. Check that the number of agents in given states is correct
-state_numbers = map.get_states_numbers()
-validated = 'OK' if (state_numbers[0] == 4 and state_numbers[1] == 0) else 'Failed'
-print(f'Check for state numbers: {validated}')
+N_PERIODS = 30
+N_MOVES_PER_PERIOD = 3
+
+stats = {}
+t_start = time()
+for i in range(N_PERIODS):
+    print(f'starting period {i}...')
+    t0 = time()
+    for j in range(N_MOVES_PER_PERIOD):
+        t_ = time()
+        map.make_move()
+    map.forward_all_cells()
+    states_ids, state_numbers = map.get_states_numbers()
+    stats[i] = {states_ids[k]: state_numbers[k] for k in range(len(states_ids))}
+    print(f'period {i} computed in {time() - t0}s')
+
+print(f'duration: {time() - t_start}s')
+print(stats)
+
+print(f'r_factors: {map.get_r_factors()}')
+
+infecting_agents, infected_agents, infected_periods = map.get_contamination_chain()
+print(f'All infecting != infected? {(infecting_agents == infected_agents).sum() == 0}')
