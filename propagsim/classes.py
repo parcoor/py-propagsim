@@ -45,7 +45,7 @@ class Agent:
         self.home_cell_id = home_cell_id
         self.current_state_duration = current_state_duration  # how long the agent has been in this state
         self.been_infected = been_infected
-        self.least_state, self.least_state_duration = get_least_severe_state(states, durations)
+        self.least_state = get_least_severe_state(states)
 
     def get_id(self):
         return self.id
@@ -95,31 +95,11 @@ class Agent:
     def set_home_cell_id(self, home_cell_id):
         self.home_cell_id = home_cell_id
 
-    def get_been_infected(self):
-        return self.been_infected
-
-    def set_been_infected(self, been_infected):
-        self.been_infected = int(been_infected)
-
-    def get_least_state(self):
-        return self.least_state
-
     def get_least_state_id(self):
         return self.least_state.get_id()
 
-    def get_least_state_duration(self):
-        return self.least_state_duration
-
-    def get_contagiousity(self):
-        return self.current_state.get_contagiousity()
-
-    def get_sensitivity(self):
-        return self.current_state.get_sensitivity()
-
     def get_severity(self):
         return self.current_state.get_severity()
-
-
 
 
 class Transitions:
@@ -322,12 +302,13 @@ class Map:
         draw = (draw < res)
         infecting_agents = infecting_agents[draw]
         infected_agents = pinfected_agents[draw]
-        if self.verbose > 1:
         n_infected_agents = infected_agents.shape[0]
+        if self.verbose > 1:
             print(f'Infecting and infected agents should be all different, are they? {((infecting_agents == infected_agents).sum() == 0)}')
-            print(f'Number of infected agents: {n_infected_agents.shape[0]}')
+            print(f'Number of infected agents: {n_infected_agents}')
 
         self.current_state_ids[infected_agents] = self.least_state_ids[infected_agents]
+        self.current_state_durations[infected_agents] = 0
         self.n_infected_period += n_infected_agents
         self.infecting_agents = np.append(self.infecting_agents, infecting_agents)
         self.infected_agents = np.append(self.infected_agents, infected_agents)

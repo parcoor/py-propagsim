@@ -9,14 +9,19 @@ import warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning) 
 
 
-def get_least_severe_state(states, durations):
+def get_least_severe_state(states):
     """ Get the state that has the least severity > 0 """
-    least_severity, least_severe_duration, least_severe_state = 1, 0, None
-    for state, duration in zip(states, durations):
-        severity = state.get_severity()
-        if severity < least_severity and severity > 0:
-            least_severe_state , least_severe_duration = state, duration
-    return state, duration
+    least_severe_state = None
+    for state in states:
+        if state.severity == 0:
+            continue
+        if least_severe_state is None:
+            least_severe_state = state
+        elif state.get_severity() < least_severe_state.get_severity():
+            least_severe_state = state
+    if least_severe_state is None:  # all states have severity 0
+        least_severe_state = states[0]
+    return least_severe_state
 
 
 def squarify(xcoords, ycoords, width_square):
