@@ -1,4 +1,4 @@
-import numpy as np
+import tensorflow as np
 import os, pickle
 from utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice, group_max
 
@@ -156,13 +156,16 @@ class Map:
         way agents can move from a cell to another. `possible_states` must be distinct.
         We let each the possibility for each agent to have its own least severe state to make the model more flexible.
         Default parameter set to None in order to be able to create an empty map and load it from disk
+        `dcale` allows to weight the importance of the distance vs. attractivity for the moves to cells
         """
         if cells is None or agents is None or possible_states is None:
             return
         self.current_period = current_period
         self.verbose = verbose
         self.dscale = dscale
+        self.width_square = width_square
         self.n_infected_period = 0
+        
 
         self.unique_state_ids, self.unique_contagiousities, self.unique_sensitivities, self.unique_severities = [], [], [], []
         for state in possible_states:
@@ -189,12 +192,15 @@ class Map:
         attractivities = np.array(attractivities, dtype=np.float32)
         self.unsafeties = np.array(self.unsafeties, dtype=np.float32)
         # Compute inter-squares proba transition matrix
-        coords_squares, square_ids_cells = squarify(xcoords, ycoords, width_square)
+        self.coords_squares, self.square_ids_cells = squarify(xcoords, ycoords, width_square)
+        self.set_attractivities(attractivities)
+        """
         self.square_sampling_probas = get_square_sampling_probas(attractivities, square_ids_cells, coords_squares, width_square/2, dscale)
         mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
         self.eligible_cells = self.cell_ids[mask_eligible]
         # Compute square to cell transition matrix
         self.cell_sampling_probas, self.cell_index_shift = get_cell_sampling_probas(attractivities[mask_eligible], square_ids_cells[mask_eligible])
+        """
         # Process agent
         self.agent_ids = []
         self.p_moves = []
@@ -229,7 +235,7 @@ class Map:
         self.current_state_durations = np.array(self.current_state_durations, dtype=np.float32)
         self.transitions_ids = np.array(self.transitions_ids, dtype=np.uint8)  # no more than 255 possible transitions
         # the first cells in parameter `cells`must be home cell, otherwise modify here
-        self.agent_squares = square_ids_cells[self.home_cell_ids]  
+        self.agent_squares = self.square_ids_cells[self.home_cell_ids]  
         # Re-order transitions by ids
         order = np.argsort(self.transitions_ids)
         self.transitions_ids = self.transitions_ids[order]
@@ -393,6 +399,8 @@ class Map:
         transitions = np.vstack((agent_transitions, agent_current_states))
         unique_cols, inverse, counts = np.unique(transitions, return_inverse=True, return_counts=True, axis=1)
         transitions = self.transitions[unique_cols[1,:],:,unique_cols[0,:]]
+        if self.verbose > 2:
+            print(f'transitions:\n{transitions}')
         # Repeat rows according to number of agents to draw for
         transitions = np.repeat(transitions, counts, axis=0)
         # Select new states according to transition matrix
@@ -443,6 +451,8 @@ class Map:
         dsave['unsafeties'] = self.unsafeties, 
         dsave['square_sampling_probas'] =  self.square_sampling_probas, 
         dsave['eligible_cells'] =  self.eligible_cells,
+        dsave['coords_squares'] =  self.coords_squares,
+        dsave['square_ids_cells'] =  self.square_ids_cells,
         dsave['cell_sampling_probas'] = self.cell_sampling_probas, 
         dsave['cell_index_shift'] = self.cell_index_shift,
         dsave['agent_ids'] = self.agent_ids,
@@ -470,6 +480,7 @@ class Map:
         sdict['current_period'] = self.current_period
         sdict['verbose'] = self.verbose
         sdict['dcale'] = self.dscale
+        sdict['width_square'] = self.width_square
         sdict['n_infected_period'] = self.n_infected_period
         sdict['n_diseased_period'] = self.n_diseased_period
 
@@ -494,6 +505,8 @@ class Map:
         self.unsafeties = np.squeeze(np.load(os.path.join(savedir, 'unsafeties.npy')))
         self.square_sampling_probas = np.squeeze(np.load(os.path.join(savedir, 'square_sampling_probas.npy')))
         self.eligible_cells = np.squeeze(np.load(os.path.join(savedir, 'eligible_cells.npy')))
+        self.coords_squares = np.squeeze(np.load(os.path.join(savedir, 'coords_squares.npy')))
+        self.square_ids_cells = np.squeeze(np.load(os.path.join(savedir, 'square_ids_cells.npy')))
         self.cell_sampling_probas = np.squeeze(np.load(os.path.join(savedir, 'cell_sampling_probas.npy')))
         self.cell_index_shift = np.squeeze(np.load(os.path.join(savedir, 'cell_index_shift.npy')))
         self.agent_ids = np.squeeze(np.load(os.path.join(savedir, 'agent_ids.npy')))
@@ -519,10 +532,30 @@ class Map:
         self.current_period = sdict['current_period']
         self.verbose = sdict['verbose']
         self.dscale = sdict['dcale']
+        self.width_square = sdict['width_square']
         self.n_infected_period = sdict['n_infected_period']
         self.n_diseased_period = sdict['n_diseased_period']
 
-        print(f'DEBUG: self.durations.shape: {self.durations.shape}')
+    # For calibration: reset parameters that can change due to public policies
+
+    def set_p_moves(self, p_moves):
+        self.p_moves = p_moves
+
+    def set_unsafeties(self, unsafeties):
+        self.unsafeties = unsafeties
+
+    def set_attractivities(self, attractivities):
+        self.square_sampling_probas = get_square_sampling_probas(attractivities, 
+                                                        self.square_ids_cells, 
+                                                        self.coords_squares, 
+                                                        self.width_square/2, 
+                                                        self.dscale)
+        mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
+        self.eligible_cells = self.cell_ids[mask_eligible]
+        print(f'DEBUG: self.square_ids_cells.shape: {self.square_ids_cells.shape}')
+        # Compute square to cell transition matrix
+        self.cell_sampling_probas, self.cell_index_shift = get_cell_sampling_probas(attractivities[mask_eligible], self.square_ids_cells[mask_eligible])
+        
 
         
 
