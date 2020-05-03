@@ -61,7 +61,6 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
     unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)
     # `inverse` is an re-numering of `square_ids_cells` following its order: 3, 4, 6 => 0, 1, 2
     width_sample = np.max(counts)
-    print(f'width_sample: {width_sample}')
     # create a sequential index dor the cells in the squares: 
     # 1, 2, 3... for the cells in the first square, then 1, 2, .. for the cells in the second square
     # Trick: 1. shift `counts` one to the right, remove last element and append 0 at the beginning:
@@ -85,7 +84,7 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
 
 
 
-def vectorized_choice(prob_matrix, axis=1):
+def vectorized_choice(prob_matrix, repeats=None, axis=1):
     """ 
     selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise 
     see https://stackoverflow.com/questions/34187130/fast-random-weighted-selection-across-all-rows-of-a-stochastic-matrix

@@ -1,4 +1,4 @@
-import tensorflow as np
+import numpy as np
 import os, pickle
 from utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice, group_max
 
@@ -390,22 +390,10 @@ class Map:
         agent_ids_transit = agent_ids_transit.astype(np.uint32)
         agent_current_states = self.current_state_ids[agent_ids_transit]
         agent_transitions = self.transitions_ids[agent_current_states]
-        # Reorder
-        order = np.argsort(agent_transitions)
-        agent_ids_transit = agent_ids_transit[order]
-        agent_transitions = agent_transitions[order]
-        agent_current_states = agent_current_states[order]
         # Select rows corresponding to transitions to do
-        transitions = np.vstack((agent_transitions, agent_current_states))
-        unique_cols, inverse, counts = np.unique(transitions, return_inverse=True, return_counts=True, axis=1)
-        transitions = self.transitions[unique_cols[1,:],:,unique_cols[0,:]]
-        if self.verbose > 2:
-            print(f'transitions:\n{transitions}')
-        # Repeat rows according to number of agents to draw for
-        transitions = np.repeat(transitions, counts, axis=0)
+        transitions = self.transitions[agent_current_states,:,agent_transitions]
         # Select new states according to transition matrix
         new_states = vectorized_choice(transitions)
-        new_states = new_states[inverse]
         self.change_state_agents(agent_ids_transit, new_states)
 
 
