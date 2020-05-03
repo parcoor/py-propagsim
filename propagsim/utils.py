@@ -34,7 +34,7 @@ def squarify(xcoords, ycoords, width_square):
     return coords_squares, square_ids_cells
 
 
-def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squares, intra_square_dist=.5):
+def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squares, intra_square_dist=.5, dscale=1):
     # compute sum attractivities in squares
     sum_attractivity_squares, unique_squares = sum_by_group(values=attractivity_cells, groups=square_ids_cells)
     # Compute distances between all squares and squares having sum_attractivity > 0
@@ -47,6 +47,7 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
 
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
     inter_square_dists = cdist(coords_squares, coords_squares[eligible_squares,:], 'euclidean').astype(np.float32)
+    inter_square_dists = np.multiply(inter_square_dists, dscale)
     inter_square_dists = np.add(inter_square_dists, intra_square_dist)  # add .5: average distance intra square
     # Compute probability of sampling each square
     square_sampling_probas = 1 / inter_square_dists
@@ -57,25 +58,27 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
 
 
 def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
-    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)  # inverse??
-    # order = np.argsort(square_ids_cells)
-    # `unique_square_ids` is sorted #
+    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)
+    # `inverse` is an re-numering of `square_ids_cells` following its order: 3, 4, 6 => 0, 1, 2
     width_sample = np.max(counts)
+    print(f'width_sample: {width_sample}')
     # create a sequential index dor the cells in the squares: 
     # 1, 2, 3... for the cells in the first square, then 1, 2, .. for the cells in the second square
     # Trick: 1. shift `counts` one to the right, remove last element and append 0 at the beginning:
     cell_index_shift = np.insert(counts, 0, 0)[:-1]
     cell_index_shift = np.cumsum(cell_index_shift)  # [0, ncells in square0, ncells in square 1, etc...]
     to_subtract = np.repeat(cell_index_shift, counts)  # repeat each element as many times as the corresponding square has cells
+
     inds_cells_in_square = np.arange(0, attractivity_cells.shape[0])
     inds_cells_in_square = np.subtract(inds_cells_in_square, to_subtract)  # we have the right sequential order
-    inds_cells_in_square = inds_cells_in_square[inverse]  
-    # Now `inds_cells_in_square` is a seq. aligned with `attractivity_cells` and `square_id_cells` describing the index of each cell
-    # within the square it belongs to
-    
+
+    order = np.argsort(inverse)
+    inverse = inverse[order]
+    attractivity_cells = attractivity_cells[order]
+
     # Create `sample_arr`: one row for each square. The values first value in each row are the attractivity of its cell. Padded with 0.
     cell_sampling_probas = np.zeros((unique_square_ids.shape[0], width_sample))
-    cell_sampling_probas[square_ids_cells, inds_cells_in_square] = attractivity_cells
+    cell_sampling_probas[inverse, inds_cells_in_square] = attractivity_cells
     # Normalize the rows of `sample_arr` s.t. the rows are probability distribution
     cell_sampling_probas /= np.linalg.norm(cell_sampling_probas, ord=1, axis=1, keepdims=True).astype(np.float32)
     return cell_sampling_probas, cell_index_shift

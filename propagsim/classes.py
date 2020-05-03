@@ -1,7 +1,6 @@
 import numpy as np
-from itertools import compress
+import os, pickle
 from utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice, group_max
-from multiprocessing import Pool, cpu_count
 
 
 class State:
@@ -152,13 +151,18 @@ class Cell:
 
         
 class Map:
-    def __init__(self, cells, agents, possible_states, width_square=1, current_period=0, verbose=0):
+    def __init__(self, cells=None, agents=None, possible_states=None, dscale=1, width_square=1, current_period=0, verbose=0):
         """ A map contains a list of `cells`, `agents` and an implementation of the 
         way agents can move from a cell to another. `possible_states` must be distinct.
-        We let each the possibility for each agent to have its own least severe state to make the model more flexible
+        We let each the possibility for each agent to have its own least severe state to make the model more flexible.
+        Default parameter set to None in order to be able to create an empty map and load it from disk
         """
+        if cells is None or agents is None or possible_states is None:
+            return
         self.current_period = current_period
         self.verbose = verbose
+        self.dscale = dscale
+        self.n_infected_period = 0
 
         self.unique_state_ids, self.unique_contagiousities, self.unique_sensitivities, self.unique_severities = [], [], [], []
         for state in possible_states:
@@ -186,17 +190,15 @@ class Map:
         self.unsafeties = np.array(self.unsafeties, dtype=np.float32)
         # Compute inter-squares proba transition matrix
         coords_squares, square_ids_cells = squarify(xcoords, ycoords, width_square)
-        self.square_sampling_probas = get_square_sampling_probas(attractivities, square_ids_cells, coords_squares, width_square/2)
+        self.square_sampling_probas = get_square_sampling_probas(attractivities, square_ids_cells, coords_squares, width_square/2, dscale)
         mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
         self.eligible_cells = self.cell_ids[mask_eligible]
         # Compute square to cell transition matrix
         self.cell_sampling_probas, self.cell_index_shift = get_cell_sampling_probas(attractivities[mask_eligible], square_ids_cells[mask_eligible])
-
+        # Process agent
         self.agent_ids = []
         self.p_moves = []
-        # per agent
         self.least_state_ids = []
-        # followings are per least severe state
         self.unique_state_ids = []
         self.home_cell_ids = []
         self.current_state_ids = []
@@ -204,9 +206,7 @@ class Map:
         self.transitions = []
         self.transitions_ids = []
         self.durations = []
-        self.n_infected_period = 0
         
-        unique_states_processed = False
         for agent in agents:
             self.agent_ids.append(agent.get_id())
             self.p_moves.append(agent.get_p_move())
@@ -220,7 +220,6 @@ class Map:
                 self.transitions_ids.append(transitions_id)
                 self.transitions.append(agent.get_transitions_arr())
             self.durations.append(np.array(agent.get_durations(), dtype=np.float32))
-            self.n_infected_period += int(agent.get_severity() > 0)
 
         self.agent_ids = np.array(self.agent_ids, dtype=np.float32)
         self.p_moves = np.array(self.p_moves, dtype=np.float32)
@@ -245,7 +244,6 @@ class Map:
         # TODO: Contagion chains
         # Define arrays for agents state transitions
         self.infecting_agents, self.infected_agents, self.infected_periods = np.array([]), np.array([]), np.array([])
-
 
 
     def contaminate(self, selected_agents, selected_cells):
@@ -427,5 +425,106 @@ class Map:
         """ switch `agent_ids` to `new_state_ids` """
         self.current_state_ids[agent_ids] = new_state_ids
         self.current_state_durations[agent_ids] = 0
+
+
+    ### Persistence methods
+
+    def save(self, savedir):
+        """ persist map in `savedir` """
+        if not os.path.isdir(savedir):
+            os.makedirs(savedir)
+        # Persist arrays
+        dsave = {}
+        dsave['unique_state_ids'] = self.unique_state_ids, 
+        dsave['unique_contagiousities'] = self.unique_contagiousities, 
+        dsave['unique_sensitivities'] =  self.unique_sensitivities, 
+        dsave['unique_severities'] =  self.unique_severities, 
+        dsave['cell_ids'] =  self.cell_ids, 
+        dsave['unsafeties'] = self.unsafeties, 
+        dsave['square_sampling_probas'] =  self.square_sampling_probas, 
+        dsave['eligible_cells'] =  self.eligible_cells,
+        dsave['cell_sampling_probas'] = self.cell_sampling_probas, 
+        dsave['cell_index_shift'] = self.cell_index_shift,
+        dsave['agent_ids'] = self.agent_ids,
+        dsave['p_moves'] = self.p_moves,
+        dsave['least_state_ids'] = self.least_state_ids,
+        dsave['unique_state_ids'] = self.unique_state_ids,
+        dsave['home_cell_ids'] = self.home_cell_ids,
+        dsave['current_state_ids'] = self.current_state_ids,
+        dsave['current_state_durations'] = self.current_state_durations,
+        dsave['agent_squares'] = self.agent_squares
+        dsave['transitions'] = self.transitions,
+        dsave['transitions_ids'] = self.transitions_ids,
+        dsave['durations'] = self.durations,
+        dsave['r_factors'] = self.r_factors, 
+        dsave['infecting_agents'] = self.infecting_agents, 
+        dsave['infected_agents'] = self.infected_agents, 
+        dsave['infected_periods'] = self.infected_periods
+
+        for fname, arr in dsave.items():
+            filepath = os.path.join(savedir, f'{fname}.npy')
+            np.save(filepath, arr)
+
+        # Persist scalars and other parameters
+        sdict = {}
+        sdict['current_period'] = self.current_period
+        sdict['verbose'] = self.verbose
+        sdict['dcale'] = self.dscale
+        sdict['n_infected_period'] = self.n_infected_period
+        sdict['n_diseased_period'] = self.n_diseased_period
+
+        sdict_path = os.path.join(savedir, 'params.pkl')
+        with open(sdict_path, 'wb') as f:
+            pickle.dump(sdict, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        if self.verbose > 0:
+            print(f'Map persisted under folder: {savedir}')
+
+
+    def load(self, savedir):
+        """ load map that has been persisted in `savedir` through `self.save()` """
+        if not os.path.isdir(savedir):
+            print(f'{savedir} is not a path')
+        
+        self.unique_state_ids = np.squeeze(np.load(os.path.join(savedir, 'unique_state_ids.npy')))
+        self.unique_contagiousities = np.squeeze(np.load(os.path.join(savedir, 'unique_contagiousities.npy')))
+        self.unique_sensitivities = np.squeeze(np.load(os.path.join(savedir, 'unique_sensitivities.npy')))
+        self.unique_severities = np.squeeze(np.load(os.path.join(savedir, 'unique_severities.npy')))
+        self.cell_ids = np.squeeze(np.load(os.path.join(savedir, 'cell_ids.npy')))
+        self.unsafeties = np.squeeze(np.load(os.path.join(savedir, 'unsafeties.npy')))
+        self.square_sampling_probas = np.squeeze(np.load(os.path.join(savedir, 'square_sampling_probas.npy')))
+        self.eligible_cells = np.squeeze(np.load(os.path.join(savedir, 'eligible_cells.npy')))
+        self.cell_sampling_probas = np.squeeze(np.load(os.path.join(savedir, 'cell_sampling_probas.npy')))
+        self.cell_index_shift = np.squeeze(np.load(os.path.join(savedir, 'cell_index_shift.npy')))
+        self.agent_ids = np.squeeze(np.load(os.path.join(savedir, 'agent_ids.npy')))
+        self.p_moves = np.squeeze(np.load(os.path.join(savedir, 'p_moves.npy')))
+        self.least_state_ids = np.squeeze(np.load(os.path.join(savedir, 'least_state_ids.npy')))
+        self.unique_state_ids = np.squeeze(np.load(os.path.join(savedir, 'unique_state_ids.npy')))
+        self.home_cell_ids = np.squeeze(np.load(os.path.join(savedir, 'home_cell_ids.npy')))
+        self.current_state_ids = np.squeeze(np.load(os.path.join(savedir, 'current_state_ids.npy')))
+        self.current_state_durations = np.squeeze(np.load(os.path.join(savedir, 'current_state_durations.npy')))
+        self.agent_squares = np.squeeze(np.load(os.path.join(savedir, 'agent_squares.npy')))
+        self.transitions = np.squeeze(np.load(os.path.join(savedir, 'transitions.npy')))
+        self.transitions_ids = np.squeeze(np.load(os.path.join(savedir, 'transitions_ids.npy')))
+        self.durations = np.squeeze(np.load(os.path.join(savedir, 'durations.npy')))
+        self.r_factors = np.squeeze(np.load(os.path.join(savedir, 'r_factors.npy')))
+        self.infecting_agents = np.squeeze(np.load(os.path.join(savedir, 'infecting_agents.npy')))
+        self.infected_agents = np.squeeze(np.load(os.path.join(savedir, 'infected_agents.npy')))
+        self.infected_periods = np.squeeze(np.load(os.path.join(savedir, 'infected_periods.npy')))
+
+        sdict_path = os.path.join(savedir, 'params.pkl')
+        with open(sdict_path, 'rb') as f:
+            sdict = pickle.load(f)
+
+        self.current_period = sdict['current_period']
+        self.verbose = sdict['verbose']
+        self.dscale = sdict['dcale']
+        self.n_infected_period = sdict['n_infected_period']
+        self.n_diseased_period = sdict['n_diseased_period']
+
+        print(f'DEBUG: self.durations.shape: {self.durations.shape}')
+
+        
+
 
             
