@@ -321,6 +321,7 @@ class Map:
 
     def move_agents(self, selected_agents):
         """ First select the square where they move and then the cell inside the square """
+        """
         selected_agents = selected_agents.astype(np.uint32)
         agents_squares_to_move = self.agent_squares[selected_agents]
 
@@ -351,6 +352,23 @@ class Map:
         index_shift = self.cell_index_shift[selected_squares]
         selected_cells = np.add(selected_cells, index_shift)
         # return selected_agents since it has been re-ordered
+        """
+        selected_agents = selected_agents.astype(np.uint32)
+        agents_squares_to_move = self.agent_squares[selected_agents]
+
+       
+        square_sampling_ps = self.square_sampling_probas[agents_squares_to_move,:]
+        # Chose one square for each row (agent), considering each row as a sample proba
+        selected_squares = vectorized_choice(square_sampling_ps)
+        if self.verbose > 1:
+            print(f'{(agents_squares_to_move != selected_squares).sum()}/{selected_agents.shape[0]} agents moving outside of their square')
+
+        cell_sampling_ps = self.cell_sampling_probas[selected_squares,:]
+        cell_sampling_ps = cell_sampling_ps.astype(np.float16)  # float16 to avoid max memory error, precision should be enough
+        selected_cells = vectorized_choice(cell_sampling_ps)
+        # Now we have like "cell 2 in square 1, cell n in square 2 etc." we have to go back to the actual cell id
+        index_shift = self.cell_index_shift[selected_squares]
+        selected_cells = np.add(selected_cells, index_shift)
         return selected_agents, selected_cells
 
 
