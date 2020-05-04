@@ -182,7 +182,7 @@ class Map:
             self.cell_ids.append(cell.get_id())
             coords = cell.get_position()
             xcoords.append(coords[0])
-            ycoords.append(coords[0])
+            ycoords.append(coords[1])
             attractivities.append(cell.get_attractivity())
             self.unsafeties.append(cell.get_unsafety())
 
@@ -193,13 +193,6 @@ class Map:
         # Compute inter-squares proba transition matrix
         self.coords_squares, self.square_ids_cells = squarify(xcoords, ycoords)
         self.set_attractivities(attractivities)
-        """
-        self.square_sampling_probas = get_square_sampling_probas(attractivities, square_ids_cells, coords_squares, width_square/2, dscale)
-        mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
-        self.eligible_cells = self.cell_ids[mask_eligible]
-        # Compute square to cell transition matrix
-        self.cell_sampling_probas, self.cell_index_shift = get_cell_sampling_probas(attractivities[mask_eligible], square_ids_cells[mask_eligible])
-        """
         # Process agent
         self.agent_ids = []
         self.p_moves = []
@@ -240,6 +233,9 @@ class Map:
         self.transitions_ids = self.transitions_ids[order]
         self.transitions = np.dstack(self.transitions)
         self.transitions = self.transitions[:,:, order]
+        # Compute upfront cumulated sum
+        self.transitions = np.cumsum(self.transitions, axis=1)
+        
         self.durations = np.vstack(self.durations)
         # Compute probas_move for agent selection
         # Define variable for monitoring the propagation (r factor, contagion chain)
@@ -249,6 +245,8 @@ class Map:
         # TODO: Contagion chains
         # Define arrays for agents state transitions
         self.infecting_agents, self.infected_agents, self.infected_periods = np.array([]), np.array([]), np.array([])
+
+        
 
 
     def contaminate(self, selected_agents, selected_cells):
@@ -300,9 +298,11 @@ class Map:
         selected_contagiousities = np.repeat(selected_contagiousities, counts)
         # Compute contagions
         res = np.multiply(selected_contagiousities, selected_sensitivities)
+        print(f'DEBUG: res.shape: {res.shape}, selected_unsafeties.shape: {selected_unsafeties.shape}')
         res = np.multiply(res, selected_unsafeties)
         draw = np.random.uniform(size=infecting_agents.shape[0])
         draw = (draw < res)
+        print(f'DEBUG: draw.shape: {draw.shape}, infecting_agents.shape: {infecting_agents.shape}')
         infecting_agents = infecting_agents[draw]
         infected_agents = pinfected_agents[draw]
         n_infected_agents = infected_agents.shape[0]
@@ -334,6 +334,7 @@ class Map:
         square_sampling_ps = np.repeat(square_sampling_ps, counts, axis=0)
         # Chose one square for each row (agent), considering each row as a sample proba
         selected_squares = vectorized_choice(square_sampling_ps)
+        print(f'DEBUG: max selected_squares: {np.max(selected_squares)}')
         order = np.argsort(selected_squares)
         selected_agents = selected_agents[order]
         selected_squares = selected_squares[order]
@@ -342,6 +343,7 @@ class Map:
         # Now select cells in the squares where the agents move
         unique_selected_squares, counts = np.unique(selected_squares, return_counts=True)
         unique_selected_squares = unique_selected_squares.astype(np.uint16)
+        print(f'DEBUG: self.cell_sampling_probas.shape: {self.cell_sampling_probas.shape}, square_sampling_ps.shape: {square_sampling_ps.shape}')
         cell_sampling_ps = self.cell_sampling_probas[unique_selected_squares,:]
         cell_sampling_ps = np.repeat(cell_sampling_ps, counts, axis=0)
         cell_sampling_ps = cell_sampling_ps.astype(np.float16)  # float16 to avoid max memory error, precision should be enough
@@ -538,9 +540,11 @@ class Map:
                                                         self.dscale)
         mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
         self.eligible_cells = self.cell_ids[mask_eligible]
-        print(f'DEBUG: self.square_ids_cells.shape: {self.square_ids_cells.shape}')
         # Compute square to cell transition matrix
         self.cell_sampling_probas, self.cell_index_shift = get_cell_sampling_probas(attractivities[mask_eligible], self.square_ids_cells[mask_eligible])
+        # Compute upfront cumulated sum of sampling matrices
+        self.square_sampling_probas = np.cumsum(self.square_sampling_probas, axis=1)
+        self.cell_sampling_probas = np.cumsum(self.cell_sampling_probas, axis=1)
         
 
         

@@ -38,9 +38,7 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
     mask_attractivity = (sum_attractivity_squares > 0)
     eligible_squares = unique_squares[mask_attractivity]
     sum_attractivity_squares = sum_attractivity_squares[mask_attractivity]
-    order = np.argsort(eligible_squares)
-    eligible_squares = eligible_squares[order]
-    sum_attractivity_squares = sum_attractivity_squares[order]
+
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
     inter_square_dists = cdist(coords_squares, coords_squares[eligible_squares,:], 'euclidean').astype(np.float32)
     square_sampling_probas = np.multiply(inter_square_dists, -0.1 * dscale)
@@ -83,9 +81,11 @@ def vectorized_choice(prob_matrix,axis=1):
     selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise 
     see https://stackoverflow.com/questions/34187130/fast-random-weighted-selection-across-all-rows-of-a-stochastic-matrix
     """
-    s = prob_matrix.cumsum(axis=axis)
+    # s = prob_matrix.cumsum(axis=axis)
     r = np.random.rand(prob_matrix.shape[1-axis]).reshape(2*(1-axis)-1, 2*axis - 1)
-    k = (s < r).sum(axis=axis)
+    k = (prob_matrix < r).sum(axis=axis)
+    max_choice = prob_matrix.shape[axis]
+    k[k>max_choice] = max_choice
     return k
 
 
