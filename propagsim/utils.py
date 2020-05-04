@@ -5,7 +5,6 @@ import numpy as np
 from scipy.spatial.distance import cdist
 import warnings
 
-
 warnings.filterwarnings('ignore', category=RuntimeWarning) 
 
 
@@ -24,17 +23,15 @@ def get_least_severe_state(states):
     return least_severe_state
 
 
-def squarify(xcoords, ycoords, width_square):
-    xcoords_square = np.divide(xcoords, width_square).astype(np.int32)
-    ycoords_square = np.divide(ycoords, width_square).astype(np.int32)
+def squarify(xcoords, ycoords):
+    xcoords_square = xcoords.astype(np.int32)
+    ycoords_square = ycoords.astype(np.int32)
     coords_squares = np.vstack((xcoords_square, ycoords_square)).T
-    coords_squares = np.add(coords_squares, width_square / 2)
     coords_squares, square_ids_cells = np.unique(coords_squares, return_inverse=True,  axis=0)
-    coords_squares = np.multiply(coords_squares, width_square)
     return coords_squares, square_ids_cells
 
 
-def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squares, intra_square_dist=.5, dscale=1):
+def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squares, dscale=1):
     # compute sum attractivities in squares
     sum_attractivity_squares, unique_squares = sum_by_group(values=attractivity_cells, groups=square_ids_cells)
     # Compute distances between all squares and squares having sum_attractivity > 0
@@ -44,16 +41,13 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
     order = np.argsort(eligible_squares)
     eligible_squares = eligible_squares[order]
     sum_attractivity_squares = sum_attractivity_squares[order]
-
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
     inter_square_dists = cdist(coords_squares, coords_squares[eligible_squares,:], 'euclidean').astype(np.float32)
-    inter_square_dists = np.multiply(inter_square_dists, dscale)
-    inter_square_dists = np.add(inter_square_dists, intra_square_dist)  # add .5: average distance intra square
-    # Compute probability of sampling each square
-    square_sampling_probas = 1 / inter_square_dists
+    square_sampling_probas = np.multiply(inter_square_dists, -0.1 * dscale)
+    square_sampling_probas = np.exp(square_sampling_probas)
     square_sampling_probas *= sum_attractivity_squares[None,:]  # row-wise multiplication
     square_sampling_probas /= norm(square_sampling_probas, ord=1, axis=1, keepdims=True)
-    square_sampling_probas = square_sampling_probas.astype(np.float32)
+    square_sampling_probas = square_sampling_probas.astype(np.float32) 
     return square_sampling_probas
 
 
@@ -84,7 +78,7 @@ def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
 
 
 
-def vectorized_choice(prob_matrix, repeats=None, axis=1):
+def vectorized_choice(prob_matrix,axis=1):
     """ 
     selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise 
     see https://stackoverflow.com/questions/34187130/fast-random-weighted-selection-across-all-rows-of-a-stochastic-matrix
@@ -93,6 +87,7 @@ def vectorized_choice(prob_matrix, repeats=None, axis=1):
     r = np.random.rand(prob_matrix.shape[1-axis]).reshape(2*(1-axis)-1, 2*axis - 1)
     k = (s < r).sum(axis=axis)
     return k
+
 
 
 def group_max(data, groups):

@@ -151,7 +151,7 @@ class Cell:
 
         
 class Map:
-    def __init__(self, cells=None, agents=None, possible_states=None, dscale=1, width_square=1, current_period=0, verbose=0):
+    def __init__(self, cells=None, agents=None, possible_states=None, dscale=1, current_period=0, verbose=0):
         """ A map contains a list of `cells`, `agents` and an implementation of the 
         way agents can move from a cell to another. `possible_states` must be distinct.
         We let each the possibility for each agent to have its own least severe state to make the model more flexible.
@@ -163,7 +163,6 @@ class Map:
         self.current_period = current_period
         self.verbose = verbose
         self.dscale = dscale
-        self.width_square = width_square
         self.n_infected_period = 0
         
 
@@ -188,11 +187,11 @@ class Map:
             self.unsafeties.append(cell.get_unsafety())
 
         self.cell_ids = np.array(self.cell_ids, dtype=np.uint32)
-        xcoords, y_coords = np.array(xcoords, dtype=np.float32), np.array(ycoords, dtype=np.float32)
+        xcoords, ycoords = np.array(xcoords, dtype=np.float32), np.array(ycoords, dtype=np.float32)
         attractivities = np.array(attractivities, dtype=np.float32)
         self.unsafeties = np.array(self.unsafeties, dtype=np.float32)
         # Compute inter-squares proba transition matrix
-        self.coords_squares, self.square_ids_cells = squarify(xcoords, ycoords, width_square)
+        self.coords_squares, self.square_ids_cells = squarify(xcoords, ycoords)
         self.set_attractivities(attractivities)
         """
         self.square_sampling_probas = get_square_sampling_probas(attractivities, square_ids_cells, coords_squares, width_square/2, dscale)
@@ -321,7 +320,6 @@ class Map:
 
     def move_agents(self, selected_agents):
         """ First select the square where they move and then the cell inside the square """
-        """
         selected_agents = selected_agents.astype(np.uint32)
         agents_squares_to_move = self.agent_squares[selected_agents]
 
@@ -340,7 +338,7 @@ class Map:
         selected_agents = selected_agents[order]
         selected_squares = selected_squares[order]
         if self.verbose > 1:
-            print(f'{(agents_squares_to_move[order] != selected_squares).sum()}/{selected_agents.shape[0]} agents moving outside of their square')
+            print(f'{(agents_squares_to_move != selected_squares).sum()}/{selected_agents.shape[0]} agents moving outside of their square')
         # Now select cells in the squares where the agents move
         unique_selected_squares, counts = np.unique(selected_squares, return_counts=True)
         unique_selected_squares = unique_selected_squares.astype(np.uint16)
@@ -352,23 +350,6 @@ class Map:
         index_shift = self.cell_index_shift[selected_squares]
         selected_cells = np.add(selected_cells, index_shift)
         # return selected_agents since it has been re-ordered
-        """
-        selected_agents = selected_agents.astype(np.uint32)
-        agents_squares_to_move = self.agent_squares[selected_agents]
-
-       
-        square_sampling_ps = self.square_sampling_probas[agents_squares_to_move,:]
-        # Chose one square for each row (agent), considering each row as a sample proba
-        selected_squares = vectorized_choice(square_sampling_ps)
-        if self.verbose > 1:
-            print(f'{(agents_squares_to_move != selected_squares).sum()}/{selected_agents.shape[0]} agents moving outside of their square')
-
-        cell_sampling_ps = self.cell_sampling_probas[selected_squares,:]
-        cell_sampling_ps = cell_sampling_ps.astype(np.float16)  # float16 to avoid max memory error, precision should be enough
-        selected_cells = vectorized_choice(cell_sampling_ps)
-        # Now we have like "cell 2 in square 1, cell n in square 2 etc." we have to go back to the actual cell id
-        index_shift = self.cell_index_shift[selected_squares]
-        selected_cells = np.add(selected_cells, index_shift)
         return selected_agents, selected_cells
 
 
@@ -395,6 +376,8 @@ class Map:
         self.contaminate(self.agent_ids, self.home_cell_ids)
         # Update r and associated variables
         r = self.n_infected_period / self.n_diseased_period if self.n_diseased_period > 0 else 0
+        if self.verbose > 1:
+            print(f'period {self.current_period}: r={r}')
         self.r_factors = np.append(self.r_factors, r)
         self.n_diseased_period = self.get_n_diseased()
         self.n_infected_period = 0
@@ -486,7 +469,6 @@ class Map:
         sdict['current_period'] = self.current_period
         sdict['verbose'] = self.verbose
         sdict['dcale'] = self.dscale
-        sdict['width_square'] = self.width_square
         sdict['n_infected_period'] = self.n_infected_period
         sdict['n_diseased_period'] = self.n_diseased_period
 
@@ -538,7 +520,6 @@ class Map:
         self.current_period = sdict['current_period']
         self.verbose = sdict['verbose']
         self.dscale = sdict['dcale']
-        self.width_square = sdict['width_square']
         self.n_infected_period = sdict['n_infected_period']
         self.n_diseased_period = sdict['n_diseased_period']
 
@@ -553,8 +534,7 @@ class Map:
     def set_attractivities(self, attractivities):
         self.square_sampling_probas = get_square_sampling_probas(attractivities, 
                                                         self.square_ids_cells, 
-                                                        self.coords_squares, 
-                                                        self.width_square/2, 
+                                                        self.coords_squares,  
                                                         self.dscale)
         mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
         self.eligible_cells = self.cell_ids[mask_eligible]
