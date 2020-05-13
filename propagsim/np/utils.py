@@ -112,3 +112,12 @@ def sum_by_group(values, groups):
     groups = groups[index]
     values[1:] = values[1:] - values[:-1]
     return values, groups
+
+def get_ind_in_arr(x, y):
+    """ returns the position in x of the elements in y that are in x """
+    index = np.argsort(x)
+    sorted_x = x[index]
+    sorted_index = np.searchsorted(sorted_x, y)
+    yindex = np.take(index, sorted_index, mode="clip")
+    mask = x[yindex] != y
+    return yindex[~mask]
