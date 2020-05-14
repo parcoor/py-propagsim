@@ -95,22 +95,24 @@ n_infected = 100
 
 inds_1 = np.where(current_state_ids==1)[0]
 n2switch = max(current_state_ids[current_state_ids==3].shape[0] - n_infected, 0)
-print(f'3 to switch: {n2switch}')
-inds2switch = np.random.choice(inds_1, size=n2switch)
-# durations2switch = draw_lognormal(pdict['mean_infected_t'], pdict['mean_infected_t'] - 1, n2switch)
-durations2switch = -1
-current_state_ids[inds2switch] = 0
-current_state_durations[inds2switch] = durations2switch
-#n2switch = max(5*300 - current_state_ids[current_state_ids==1].shape[0], 0)
+if n2switch > 0:
+    print(f'3 to switch: {n2switch}')
+    inds2switch = np.random.choice(inds_1, size=n2switch)
+    # durations2switch = draw_lognormal(pdict['mean_infected_t'], pdict['mean_infected_t'] - 1, n2switch)
+    durations2switch = -1
+    current_state_ids[inds2switch] = 0
+    current_state_durations[inds2switch] = durations2switch
+    #n2switch = max(5*300 - current_state_ids[current_state_ids==1].shape[0], 0)
 
 n2switch = max(current_state_ids[current_state_ids==1].shape[0] - 5 * n_infected, 0)
-print(f'1 to switch: {n2switch}')
-durations2switch = -1
-# durations2switch = draw_lognormal(pdict['mean_asymptomatic_t'], pdict['mean_asymptomatic_t'] - 1, n2switch)
-current_state_ids[inds2switch] = 0
-current_state_durations[inds2switch] = durations2switch
-np.save(os.path.join(map_path, 'current_state_durations.npy'), current_state_durations)
-np.save(os.path.join(map_path, 'current_state_ids.npy'), current_state_ids)
+if n2switch > 0:
+    print(f'1 to switch: {n2switch}')
+    durations2switch = -1
+    # durations2switch = draw_lognormal(pdict['mean_asymptomatic_t'], pdict['mean_asymptomatic_t'] - 1, n2switch)
+    current_state_ids[inds2switch] = 0
+    current_state_durations[inds2switch] = durations2switch
+    np.save(os.path.join(map_path, 'current_state_durations.npy'), current_state_durations)
+    np.save(os.path.join(map_path, 'current_state_ids.npy'), current_state_ids)
 
 
 # agents move now `f_unmove`x less than before lockdown

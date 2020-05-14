@@ -258,7 +258,6 @@ class Map:
 
         t0 = time()
         order_cells = np.argsort(selected_cells, kind='heapsort')
-        print(f'sort time (numpy): {time() - t0}')
         selected_cells = np.sort(selected_cells, kind='heapsort').astype(np.uint32)
         # Sort other datas
         selected_unsafeties = self.unsafeties[selected_cells]
@@ -305,9 +304,7 @@ class Map:
         # Find for each cell which agent has the max contagiousity inside (it will be the contaminating agent)
         max_contagiousities, mask_max_contagiousities = group_max(data=selected_contagiousities, groups=selected_cells) 
         infecting_agents = selected_agents[mask_max_contagiousities]
-        selected_contagiousities = max_contagiousities
 
-        selected_contagiousities = selected_contagiousities[mask_max_contagiousities]
         selected_contagiousities = selected_contagiousities[mask_max_contagiousities]
         # Select agents that can be potentially infected ("pinfected") and corresponding variables
         pinfected_mask = (selected_sensitivities > 0)
@@ -442,14 +439,11 @@ class Map:
         self.current_state_durations += 1
         to_transit = self.agent_ids[to_transit]
         new_states = self.transit_states(to_transit, tracing_rate)
-        # Contamination at home by end of the period
-        self.contaminate(self.agent_ids, self.home_cell_ids, family=True)
-        self.transit_states(to_transit)
-        # Contamination at home by end of the period
-        self.contaminate(self.agent_ids, self.home_cell_ids)
-        self.transit_states(to_transit)
+        self.transit_states(to_transit, tracing_rate)
+
         # Contamination at home by end of the period
         self.contaminate(self.agent_ids, self.home_cell_ids)
+
         # Update r and associated variables
         r = self.n_infected_period / self.n_diseased_period if self.n_diseased_period > 0 else 0
         if self.verbose > 1:
@@ -513,11 +507,6 @@ class Map:
             mask_traced = (mask_traced > 0)
             traced_agents = infected_by_nia[mask_traced].astype(np.uint32)
             self.p_moves[traced_agents] = np.divide(self.p_moves[traced_agents], 5)
-
-    def change_state_agents(self, agent_ids, new_state_ids):
-        """ switch `agent_ids` to `new_state_ids` """
-        self.current_state_ids[agent_ids] = new_state_ids
-        self.current_state_durations[agent_ids] = 0
 
 
     ### Persistence methods
@@ -649,7 +638,7 @@ class Map:
         self.current_state_ids = current_state_ids
         self.current_state_durations = current_state_durations  # how long the agents are already in their current state
         self.durations = np.squeeze(durations) # 2d, one row for each agent
-        self.current_state_durations = np.minimum(self.current_state_durations, self.durations)
+        # self.current_state_durations = np.minimum(self.current_state_durations, self.durations)
         self.transitions_ids = transitions_ids
 
         # for cells: cell_ids, attractivities, unsafeties, xcoords, ycoords
