@@ -3,12 +3,21 @@ import numpy as np
 from time import time
 
 
+<<<<<<< HEAD
 N_PERIODS = 30
 N_MOVES_PER_PERIOD = 10
 AVG_P_MOVE = .5 / N_MOVES_PER_PERIOD
 N_AGENTS = 700000
 N_INFECTED_AGENTS_START = int(N_AGENTS / 40)
 N_SQUARES_AXIS = 30
+=======
+N_PERIODS = 3
+N_MOVES_PER_PERIOD = 4
+AVG_P_MOVE = .5 / N_MOVES_PER_PERIOD
+N_AGENTS = 700000
+N_INFECTED_AGENTS_START = int(N_AGENTS / 40)
+N_SQUARES_AXIS = 40
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 AVG_AGENTS_HOME = 2.2
 N_HOME_CELLS = int(N_AGENTS / AVG_AGENTS_HOME)
 PROP_PUBLIC_CELLS = 1 / 70  # there is one public place for 70 people in France
@@ -38,7 +47,11 @@ def draw_beta(min_value, max_value, mean_value, n_values, round=False):
 
 state0 = State(id=0, name='healthy', contagiousity=0, sensitivity=1, severity=0)
 <<<<<<< HEAD
+<<<<<<< HEAD
 state1 = State(id=1, name='asymptomatic', contagiousity=.2, sensitivity=0, severity=0.1)
+=======
+state1 = State(id=1, name='asymptomatic', contagiousity=.9, sensitivity=0, severity=0.1)
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
 state1 = State(id=1, name='asymptomatic', contagiousity=.9, sensitivity=0, severity=0.1)
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579

@@ -1,6 +1,10 @@
 import numpy as np
 import os, pickle
+<<<<<<< HEAD
 from utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice, group_max, get_ind_in_arr
+=======
+from utils import get_least_severe_state, squarify, get_square_sampling_probas, get_cell_sampling_probas, vectorized_choice, group_max
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 from time import time
 
 
@@ -250,6 +254,7 @@ class Map:
         
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def contaminate(self, selected_agents, selected_cells, prop_cont_factor=10, p_mask=0, family=False):
         """ both arguments have same length. If an agent with sensitivity > 0 is in the same cell 
         than an agent with contagiousity > 0: possibility of contagion
@@ -257,12 +262,17 @@ class Map:
         t0 = time()
         order_cells = np.argsort(selected_cells, kind='heapsort')
 =======
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
     def contaminate(self, selected_agents, selected_cells):
         """ both arguments have same length. If an agent with sensitivity > 0 is in the same cell 
         than an agent with contagiousity > 0: possibility of contagion """
         t0 = time()
         order_cells = np.argsort(selected_cells, kind='heapsort')
         print(f'sort time (numpy): {time() - t0}')
+<<<<<<< HEAD
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         selected_cells = np.sort(selected_cells, kind='heapsort').astype(np.uint32)
         # Sort other datas
@@ -271,11 +281,14 @@ class Map:
         selected_states = self.current_state_ids[selected_agents]
         selected_contagiousities = self.unique_contagiousities[selected_states]
 <<<<<<< HEAD
+<<<<<<< HEAD
         if p_mask > 0:
             pos_contagiousities = np.where(selected_contagiousities > 0)[0]
             n_switchoff = int(pos_contagiousities.shape[0] * p_mask)
             to_switchoff = np.random.choice(pos_contagiousities, size=n_switchoff, replace=False)
             selected_contagiousities[to_switchoff] = 0
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         selected_sensitivities = self.unique_sensitivities[selected_states]
@@ -286,9 +299,15 @@ class Map:
         # Find cells where max sensitivitity == 0 (no contagiousity can happen there)
         max_sensitivities, _ = group_max(data=selected_sensitivities, groups=selected_cells)
         # Combine them
+<<<<<<< HEAD
         mask_zero = ((max_contagiousities > 0) & (max_sensitivities > 0))
         _, count = np.unique(selected_cells, return_counts=True)
         mask_zero = np.repeat(mask_zero, count)
+=======
+        mask_zero = (np.multiply(max_contagiousities, max_sensitivities) > 0)
+        _, counts = np.unique(selected_cells, return_counts=True)
+        mask_zero = np.repeat(mask_zero, counts)
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         
         # select agents being on cells with max contagiousity and max sensitivity > 0 (and their corresponding data)
         selected_agents = selected_agents[mask_zero]
@@ -300,6 +319,10 @@ class Map:
         _, n_contagious_by_cell = np.unique(selected_cells[selected_contagiousities > 0], return_counts=True)
         _, n_non_contagious_by_cell = np.unique(selected_cells[selected_contagiousities == 0], return_counts=True)
         p_contagious = np.divide(n_contagious_by_cell, n_non_contagious_by_cell)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         n_selected_agents = selected_agents.shape[0]
         if self.verbose > 1:
             print(f'{n_selected_agents} selected agents after removing cells with max sensitivity or max contagiousity==0')
@@ -309,8 +332,12 @@ class Map:
         max_contagiousities, mask_max_contagiousities = group_max(data=selected_contagiousities, groups=selected_cells) 
         infecting_agents = selected_agents[mask_max_contagiousities]
 <<<<<<< HEAD
+<<<<<<< HEAD
         selected_contagiousities = max_contagiousities
 
+=======
+        selected_contagiousities = selected_contagiousities[mask_max_contagiousities]
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
         selected_contagiousities = selected_contagiousities[mask_max_contagiousities]
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
@@ -321,10 +348,13 @@ class Map:
         selected_unsafeties = selected_unsafeties[pinfected_mask]
         selected_cells = selected_cells[pinfected_mask]
 <<<<<<< HEAD
+<<<<<<< HEAD
         if self.verbose > 1:
             print(f'selected_contagiousities: {selected_contagiousities}')
             print(f'selected_sensitivities: {selected_sensitivities}')
             print(f'selected_unsafeties: {selected_unsafeties}')
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         # Group `selected_cells` and expand `infecting_agents` and `selected_contagiousities` accordingly
@@ -338,6 +368,7 @@ class Map:
         res = np.multiply(res, selected_unsafeties)
         # Modifiy probas contamination according to `p_contagious`
 <<<<<<< HEAD
+<<<<<<< HEAD
         """
         mask_p = (p_contagious < 1)
         res[mask_p] = np.multiply(res[mask_p], p_contagious[mask_p])
@@ -348,11 +379,16 @@ class Map:
         if family:
             draw = np.zeros(infecting_agents.shape[0])
 =======
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         mask_p = (p_contagious < 1)
         res[mask_p] = np.multiply(res[mask_p], p_contagious[mask_p])
         res[~mask_p] = 1 - np.divide(1 - res[~mask_p], p_contagious[~mask_p])
 
         draw = np.random.uniform(size=infecting_agents.shape[0])
+<<<<<<< HEAD
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         draw = (draw < res)
         infecting_agents = infecting_agents[draw]
@@ -364,8 +400,12 @@ class Map:
             print(f'Number of infected agents: {n_infected_agents}')
         """
 <<<<<<< HEAD
+<<<<<<< HEAD
         # self.current_state_ids[infected_agents] = self.least_state_ids[infected_agents]
         self.current_state_ids[infected_agents] = 1
+=======
+        self.current_state_ids[infected_agents] = self.least_state_ids[infected_agents]
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
         self.current_state_ids[infected_agents] = self.least_state_ids[infected_agents]
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
@@ -377,10 +417,13 @@ class Map:
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def set_verbose(self, verbose):
         self.verbose = verbose
 
 
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
     def move_agents(self, selected_agents):
@@ -410,8 +453,11 @@ class Map:
         unique_selected_squares, counts = np.unique(selected_squares, return_counts=True)
         unique_selected_squares = unique_selected_squares.astype(np.uint16)
 <<<<<<< HEAD
+<<<<<<< HEAD
         max_sq = self.cell_sampling_probas.shape[0] - 1
         unique_selected_squares[unique_selected_squares > max_sq] = max_sq
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         cell_sampling_ps = self.cell_sampling_probas[unique_selected_squares,:]
@@ -420,8 +466,11 @@ class Map:
         selected_cells = vectorized_choice(cell_sampling_ps)
         # Now we have like "cell 2 in square 1, cell n in square 2 etc." we have to go back to the actual cell id
 <<<<<<< HEAD
+<<<<<<< HEAD
         max_is = self.cell_index_shift.shape[0] - 1
         selected_squares[selected_squares > max_is] = max_is
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         index_shift = self.cell_index_shift[selected_squares]
@@ -430,6 +479,7 @@ class Map:
         return selected_agents, selected_cells
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     def make_move(self, prop_cont_factor=10, p_mask=0):
         """ determine which agents to move, then move hem and proceed to the contamination process """
@@ -441,10 +491,16 @@ class Map:
         """ determine which agents to move, then move hem and proceed to the contamination process """
         probas_move = np.multiply(self.p_moves.flatten(),  1 - self.unique_severities[self.current_state_ids])
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
+    def make_move(self):
+        """ determine which agents to move, then move hem and proceed to the contamination process """
+        probas_move = np.multiply(self.p_moves.flatten(),  1 - self.unique_severities[self.current_state_ids])
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         draw = np.random.uniform(size=probas_move.shape[0])
         draw = (draw < probas_move)
         selected_agents = self.agent_ids[draw]
         selected_agents, selected_cells = self.move_agents(selected_agents)
+<<<<<<< HEAD
 <<<<<<< HEAD
         if self.verbose > 1:
             print(f'{selected_agents.shape[0]} agents selected for moving in {np.unique(selected_cells).shape[0]} distinct cells')
@@ -453,6 +509,8 @@ class Map:
 
     def forward_all_cells(self, tracing_rate=0):
 =======
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         """
         if self.verbose > 1:
             print(f'{selected_agents.shape[0]} agents selected for moving')
@@ -461,6 +519,9 @@ class Map:
 
 
     def forward_all_cells(self):
+<<<<<<< HEAD
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         """ move all agents in map one time step forward """
         agents_durations = self.durations[np.arange(0, self.durations.shape[0]),self.current_state_ids]
@@ -468,9 +529,15 @@ class Map:
         self.current_state_durations += 1
         to_transit = self.agent_ids[to_transit]
 <<<<<<< HEAD
+<<<<<<< HEAD
         new_states = self.transit_states(to_transit, tracing_rate)
         # Contamination at home by end of the period
         self.contaminate(self.agent_ids, self.home_cell_ids, family=True)
+=======
+        self.transit_states(to_transit)
+        # Contamination at home by end of the period
+        self.contaminate(self.agent_ids, self.home_cell_ids)
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
         self.transit_states(to_transit)
         # Contamination at home by end of the period
@@ -484,6 +551,7 @@ class Map:
         self.n_diseased_period = self.get_n_diseased()
         self.n_infected_period = 0
 <<<<<<< HEAD
+<<<<<<< HEAD
         # tracing
         #Move one period forward
         self.current_period += 1
@@ -492,11 +560,16 @@ class Map:
     
     def transit_states(self, agent_ids_transit, tracing_rate=0):
 =======
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         #Move one period forward
         self.current_period += 1
 
     
     def transit_states(self, agent_ids_transit):
+<<<<<<< HEAD
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         if agent_ids_transit.shape[0] == 0:
             return 
@@ -508,8 +581,12 @@ class Map:
         # Select new states according to transition matrix
         new_states = vectorized_choice(transitions)
 <<<<<<< HEAD
+<<<<<<< HEAD
         self.change_state_agents(agent_ids_transit, new_states, tracing_rate)
         return new_states
+=======
+        self.change_state_agents(agent_ids_transit, new_states)
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 =======
         self.change_state_agents(agent_ids_transit, new_states)
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
@@ -536,6 +613,7 @@ class Map:
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def change_state_agents(self, agent_ids, new_state_ids, tracing_rate=0):
         """ switch `agent_ids` to `new_state_ids` """
         self.current_state_ids[agent_ids] = new_state_ids
@@ -552,10 +630,15 @@ class Map:
             self.p_moves[traced_agents] = np.divide(self.p_moves[traced_agents], 5)
 
 =======
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
     def change_state_agents(self, agent_ids, new_state_ids):
         """ switch `agent_ids` to `new_state_ids` """
         self.current_state_ids[agent_ids] = new_state_ids
         self.current_state_durations[agent_ids] = 0
+<<<<<<< HEAD
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 
 
@@ -659,6 +742,7 @@ class Map:
         self.n_diseased_period = sdict['n_diseased_period']
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     def from_arrays(self, cell_ids, attractivities, unsafeties, xcoords, ycoords, unique_state_ids, 
         unique_contagiousities, unique_sensitivities, unique_severities, transitions, agent_ids, home_cell_ids, p_moves, least_state_ids,
@@ -720,6 +804,8 @@ class Map:
 
 =======
 >>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
+=======
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
     # For calibration: reset parameters that can change due to public policies
 
     def set_p_moves(self, p_moves):
@@ -745,4 +831,8 @@ class Map:
         
 
 
+<<<<<<< HEAD
             
+=======
+            
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579

@@ -194,6 +194,11 @@ class Map:
         # for states: unique_contagiousities, unique_sensitivities, unique_severities, transitions
         # for agents: home_cell_ids, p_moves, least_state_ids, current_state_ids, current_state_durations, durations (3d)
         
+<<<<<<< HEAD
+=======
+
+        
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
         # Compute inter-squares proba transition matrix
         self.coords_squares, self.square_ids_cells = squarify(xcoords, ycoords)
         self.set_attractivities(attractivities)
@@ -576,3 +581,11 @@ class Map:
         self.square_sampling_probas = cp.cumsum(self.square_sampling_probas, axis=1)
         self.cell_sampling_probas = cp.cumsum(self.cell_sampling_probas, axis=1)
         
+<<<<<<< HEAD
+=======
+
+        
+
+
+            
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
