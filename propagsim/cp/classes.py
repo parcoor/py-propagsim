@@ -576,8 +576,3 @@ class Map:
         self.square_sampling_probas = cp.cumsum(self.square_sampling_probas, axis=1)
         self.cell_sampling_probas = cp.cumsum(self.cell_sampling_probas, axis=1)
         
-
-        
-
-
-            

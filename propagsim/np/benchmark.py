@@ -14,7 +14,7 @@ N_HOME_CELLS = int(N_AGENTS / AVG_AGENTS_HOME)
 PROP_PUBLIC_CELLS = 1 / 70  # there is one public place for 70 people in France
 N_CELLS = int(N_HOME_CELLS + N_AGENTS * PROP_PUBLIC_CELLS)
 DSCALE = 30
-AVG_UNSAFETY = .2
+AVG_UNSAFETY = .5
 
 
 def get_alpha_beta(min_value, max_value, mean_value):
@@ -37,7 +37,11 @@ def draw_beta(min_value, max_value, mean_value, n_values, round=False):
 # =========== States ==============
 
 state0 = State(id=0, name='healthy', contagiousity=0, sensitivity=1, severity=0)
+<<<<<<< HEAD
 state1 = State(id=1, name='asymptomatic', contagiousity=.2, sensitivity=0, severity=0.1)
+=======
+state1 = State(id=1, name='asymptomatic', contagiousity=.9, sensitivity=0, severity=0.1)
+>>>>>>> 024791b60731bd81bf57a6c52f3f58c77cab4579
 state2 = State(id=2, name='mild', contagiousity=.8, sensitivity=0, severity=0.8)
 state3 = State(id=3, name='hospital', contagiousity=.1, sensitivity=0, severity=1)
 state4 = State(id=4, name='reanimation', contagiousity=.05, sensitivity=0, severity=1)
