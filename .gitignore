@@ -3,7 +3,8 @@ cheatsheet*
 doc/
 tempCodeRunnerFile*
 calibrations/
-maps/
+**/maps/
+
 propagsim/np/maps/
 simulation*
 
