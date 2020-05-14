@@ -1,6 +1,6 @@
 from classes import State, Agent, Cell, Transitions, Map
 from simulation import split_population, get_durations, get_current_state_durations, get_transitions_ids, evaluate
-from simulation import get_cell_positions, get_cell_attractivities, get_cell_unsafeties, get_transitions, get_p_moves
+from simulation import get_cell_positions, get_cell_attractivities, get_cell_unsafeties, get_transitions, get_p_moves, draw_lognormal
 import numpy as np
 from time import time
 import os, json
@@ -13,7 +13,7 @@ if not os.path.isdir(CALIBRATION_DIR):
 
 # FIXED
 DAY = datetime(2020, 4, 20)
-N_PERIODS = 14
+N_PERIODS = 6
 N_AGENTS = 700000
 AVG_AGENTS_HOME = 2.2
 N_HOME_CELLS = int(N_AGENTS / AVG_AGENTS_HOME)
@@ -28,32 +28,67 @@ ids2states = {v: k for k, v in states2ids.items()}
 
 
 
+
 def get_random_parameters():
     pdict = {}
-    pdict['n_moves_per_period'] = np.random.choice(np.arange(7, 12)).astype(np.uint16)
-    avg_agent_move = np.random.uniform(1, 6)
+    """
+    pdict['n_moves_per_period'] = np.random.choice(np.arange(8, 12)).astype(np.uint16)
+    avg_agent_move = np.random.uniform(1.5, 2.5)
     pdict['avg_p_move'] = avg_agent_move / pdict['n_moves_per_period']
-    pdict['dscale'] = np.random.uniform(15, 50)
-    pdict['density_factor'] = np.random.uniform(4, 8)
-    pdict['avg_unsafety'] = np.random.uniform(.7, .9)  # scenario where nothing implemented to secure places
+    pdict['dscale'] = np.random.uniform(42, 48)
+    pdict['density_factor'] = np.random.uniform(6, 8)
+    pdict['avg_unsafety'] = np.random.uniform(.8, .9)  # scenario where nothing implemented to secure places
     pdict['avg_attractivity'] = np.random.uniform(.2, .8)
-    pdict['contagiousity_infected'] = np.random.uniform(.4, 1)
+    pdict['contagiousity_infected'] = np.random.uniform(.5, .9)
     pdict['contagiousity_asympcont'] = np.random.uniform(0, pdict['contagiousity_infected'] / 2)
-    pdict['contagiousity_recovercont'] = np.random.uniform(0, pdict['contagiousity_infected'])
-    pdict['mean_infected_t'] = np.random.uniform(4, 10)
-    pdict['severity_infected'] = np.random.uniform(.6, .9)  # the value of quarantine time could be kept after
-    pdict['severity_recovercont'] = np.random.uniform(0, pdict['severity_infected'])
+    pdict['contagiousity_recovercont'] = np.random.uniform(0, pdict['contagiousity_infected'] / 2)
+    pdict['mean_infected_t'] = np.random.uniform(4.5, 7.5)
+    pdict['severity_infected'] = np.random.uniform(.6, .75)  # the value of quarantine time could be kept after
+    pdict['severity_recovercont'] = np.random.uniform(0, (2/3) * pdict['severity_infected'])
     pdict['mean_asymptomatic_t'] = np.random.uniform(3.5, 4.5)
-    pdict['n_squares_axis'] = int(np.random.uniform(73, 146))
+    pdict['n_squares_axis'] = int(np.random.uniform(73, 115))
     pdict['prop_cont_factor'] = np.random.uniform(7, 9)
+    """
+
+    pdict['n_moves_per_period'] = np.random.choice(np.arange(5, 12)).astype(np.uint16)
+    avg_agent_move = np.random.uniform(1.5, pdict['n_moves_per_period'] - 1)
+    pdict['avg_p_move'] = avg_agent_move / pdict['n_moves_per_period']
+    pdict['dscale'] = np.random.uniform(10, 60)
+    pdict['density_factor'] = np.random.uniform(2, 10)
+    pdict['avg_unsafety'] = np.random.uniform(.8, .9)  # scenario where nothing implemented to secure places
+    pdict['avg_attractivity'] = np.random.uniform(.2, .8)
+    pdict['contagiousity_infected'] = np.random.uniform(.5, .9)
+    pdict['contagiousity_asympcont'] = np.random.uniform(0, pdict['contagiousity_infected'] / 2)
+    pdict['contagiousity_recovercont'] = np.random.uniform(0, pdict['contagiousity_infected'] / 2)
+    pdict['mean_infected_t'] = np.random.uniform(4.5, 8)
+    pdict['severity_infected'] = np.random.uniform(.6, .75)  # the value of quarantine time could be kept after
+    pdict['severity_recovercont'] = np.random.uniform(0, (2/3) * pdict['severity_infected'])
+    pdict['mean_asymptomatic_t'] = np.random.uniform(3.5, 4.5)
+    pdict['n_squares_axis'] = int(np.random.uniform(73, 115))
+    pdict['prop_cont_factor'] = np.random.uniform(1, 9)
     return pdict
 
 
-def get_current_state_durations(n_agents, n_asymp=50):
+def get_current_state_durations(n_agents, n_asymp=500):
     state_ids, state_durations = np.zeros(n_agents), -1 * np.ones(n_agents)
+    # asymp
+    n_per_duration = np.array([int(n_asymp * 1.15 ** i) for i in range(5)]).astype(np.uint32)
+    n_asymp = int(np.sum(n_per_duration))
+    durations_asymp = np.repeat(np.arange(1, 6), n_per_duration)
     inds_asymp = np.random.choice(np.arange(0, n_agents), size=n_asymp, replace=False).astype(np.uint32)
-    state_ids[inds_asymp], state_durations[inds_asymp] = 1, 3
+    state_ids[inds_asymp], state_durations[inds_asymp] = 1, durations_asymp
+
+    # infected
+    rate = .1 * 1.15 ** 5
+    n_per_duration = (rate * n_per_duration).astype(np.uint32)
+    inds_infected = np.where(state_ids==0)[0]
+    n_infected = int(np.sum(n_per_duration))
+    durations_infected = np.repeat(np.arange(1, 6), n_per_duration)
+    inds_infected = np.random.choice(inds_infected, size=n_infected, replace=False).astype(np.uint32)
+    state_ids[inds_infected], state_durations[inds_infected] = 3, durations_infected
+
     return state_ids.astype(np.uint32), state_durations.astype(np.uint32)
+
 
 
 def build_parameters(current_period=0, verbose=0):
@@ -103,7 +138,7 @@ def build_parameters(current_period=0, verbose=0):
 
 
 def evaluate_move(evaluations):
-    ind_start = 6
+    ind_start = 0
     evaluations = evaluations[ind_start:]
     n_asymptomatics = []
     for evaluation in evaluations:
@@ -132,18 +167,30 @@ def run_calibration(n_rounds, current_period=0, verbose=0):
         try:
             map.from_arrays(**array_params)
         except:
+            print('Memory error')
             memory_error = True
             pass
         if memory_error:
             memory_error = False
             continue
-            
-        for _ in range(N_PERIODS):
+
+        stop = False
+        for prd in range(N_PERIODS):
+            if stop:
+                continue
             for _ in range(pdict['n_moves_per_period']):
                 map.make_move(prop_cont_factor=pdict['prop_cont_factor'])
             map.forward_all_cells()
             state_ids, state_numbers = map.get_states_numbers()
-            evaluations.append((state_ids, state_numbers))
+            # Check if we are already in the good range at mid time
+            evaluation = (state_ids, state_numbers)
+            if prd == 6:
+                ind_asymptomatic = np.where(evaluation[0] == 1)[0][0].astype(np.uint32)
+                n_asymptomatic = evaluation[1][ind_asymptomatic]
+                if n_asymptomatic <= 10000 or n_asymptomatic >= 16000:
+                    print('Intermediary result to bad, jumping to next set of parameters')
+                    stop = True
+            evaluations.append(evaluation)
         score, progressions = evaluate_move(evaluations)
 
         if best_score is None or score < best_score:

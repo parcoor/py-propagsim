@@ -11,10 +11,9 @@ if not os.path.isdir(CALIBRATION_DIR):
     os.makedirs(CALIBRATION_DIR)
 
 # FIXED
-DAY = datetime(2020, 4, 20)
-N_PERIODS = 17
+N_PERIODS = 12
+DAY = datetime(2020, 5, 1)
 N_AGENTS = 700000
-N_SQUARES_AXIS = 125
 AVG_AGENTS_HOME = 2.2
 N_HOME_CELLS = int(N_AGENTS / AVG_AGENTS_HOME)
 PROP_PUBLIC_CELLS = 1 / 70  # there is one public place for 70 people in France
@@ -25,31 +24,44 @@ states2ids = {state: i for i, state in enumerate(states)}
 ids2states = {v: k for k, v in states2ids.items()}
 
 
+pcmove = {'avg_attractivity': 0.6031247299627243,
+          'avg_p_move': 0.2226952715457338,
+          'avg_unsafety': 0.8364355304520302,
+          'contagiousity_asympcont': 0.1423542369815547,
+          'contagiousity_infected': 0.5846204423668977,
+          'contagiousity_recovercont': 0.25774835283637465,
+          'density_factor': 2.632971403542527,
+          'dscale': 51.57802840228364,
+          'mean_asymptomatic_t': 4.073816293393876,
+          'mean_infected_t': 6.384701584242305,
+          'n_moves_per_period': 8,
+          'n_squares_axis': 77,
+          'prop_cont_factor': 8.509285494595758,
+          'severity_infected': 0.6191361706657571,
+          'severity_recovercont': 0.06978658711176687}
+
 
 def get_random_parameters():
     pdict = {}
-    pdict['n_moves_per_period'] = np.random.choice(np.arange(2, 16)).astype(np.uint16)
-    avg_agent_move = np.random.uniform(.5, 2)
-    pdict['avg_p_move'] = avg_agent_move / pdict['n_moves_per_period']
-    pdict['dscale'] = np.random.uniform(1, 50)
-    pdict['density_factor'] = np.random.uniform(1, 10)
-    pdict['avg_unsafety'] = np.random.uniform(0, 1)
+    pdict['n_moves_per_period'] = pcmove['n_moves_per_period']
+    pdict['avg_p_move'] = np.random.uniform(0, pcmove['avg_p_move'] / 2)
+    pdict['dscale'] = pcmove['dscale']
+    pdict['density_factor'] = pcmove['density_factor']
+    pdict['avg_unsafety'] = np.random.uniform(0, pcmove['avg_unsafety'])
     pdict['avg_attractivity'] = np.random.uniform(0, 1)
     pdict['p_closed'] = np.random.uniform(.8, 1)
-    pdict['contagiousity_infected'] = np.random.uniform(.3, 1)
-    pdict['contagiousity_asympcont'] = np.random.uniform(0, pdict['contagiousity_infected'])
+    pdict['contagiousity_infected'] = pcmove['contagiousity_infected']
+    pdict['contagiousity_asympcont'] = pcmove['contagiousity_asympcont']
     pdict['contagiousity_hosp'] = 0
     pdict['contagiousity_icu'] = 0
-    pdict['contagiousity_recovercont'] = np.random.uniform(0, pdict['contagiousity_infected'])
+    pdict['contagiousity_recovercont'] = pcmove['contagiousity_recovercont']
     pdict['severity_infected'] = np.random.uniform(.5, 1)
     pdict['severity_recovercont'] = np.random.uniform(0, pdict['severity_infected'])
-    pdict['mean_asymptomatic_t'] = np.random.uniform(5, 7)
-    pdict['mean_infected_t'] = np.random.uniform(4, 8)
+    pdict['mean_asymptomatic_t'] = pcmove['mean_asymptomatic_t']
+    pdict['mean_infected_t'] = pcmove['mean_infected_t']
     pdict['mean_hosp_t'] = np.random.uniform(4, 10)
     pdict['mean_icu_t'] = np.random.uniform(15, 20)
     return pdict
-
-
 
 
 
@@ -67,7 +79,7 @@ def build_parameters(current_period=0, verbose=0):
     cell_ids = np.arange(0, N_CELLS).astype(np.uint32)
     attractivities = get_cell_attractivities(N_HOME_CELLS, N_CELLS - N_HOME_CELLS, avg=pdict['avg_attractivity'], p_closed=pdict['p_closed'])
     unsafeties = get_cell_unsafeties(N_CELLS, N_HOME_CELLS, pdict['avg_unsafety'])
-    cell_positions = get_cell_positions(N_CELLS, N_SQUARES_AXIS, pdict['density_factor'])
+    cell_positions = get_cell_positions(N_CELLS, pcmove['n_squares_axis'], pdict['density_factor'])
     xcoords = cell_positions[:,0]
     ycoords = cell_positions[:,1]
     unique_state_ids = np.arange(0, len(states)).astype(np.uint32)
@@ -121,9 +133,9 @@ def run_calibration(n_rounds, current_period=0, verbose=0):
 
         if best_score is None or (score['hosp']['err'] <= best_score['hosp']['err'] and score['icu']['err'] <= best_score['icu']['err']):
             fpath = os.path.join(CALIBRATION_DIR, f'{i}.npy')
-            to_save = {'score': score, 'params': array_params, 'rt': map.get_r_factors()}
+            to_save = {'score': score, 'params': array_params, 'rt': map.get_r_factors(), 'pdict': pdict}
             print(f'New best score found: {score}, saved under {fpath}')
-            print(f"n_moves_per_period: {pdict['n_moves_per_period']}")
+            print(f"corresponding pdict:\n{pdict}")
             best_score = score
             np.save(fpath, to_save)
             map.save(os.path.join('maps', 'week1'))

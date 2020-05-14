@@ -249,7 +249,7 @@ class Map:
 
         
 
-    def contaminate(self, selected_agents, selected_cells, prop_cont_factor=10, p_mask=0):
+    def contaminate(self, selected_agents, selected_cells, prop_cont_factor=10, p_mask=0, family=False):
         """ both arguments have same length. If an agent with sensitivity > 0 is in the same cell 
         than an agent with contagiousity > 0: possibility of contagion
         prop_cont_factor: influence of the proportion of contagious people in a cell on contagion risk"""
@@ -274,9 +274,9 @@ class Map:
         # Find cells where max sensitivitity == 0 (no contagiousity can happen there)
         max_sensitivities, _ = group_max(data=selected_sensitivities, groups=selected_cells)
         # Combine them
-        mask_zero = (np.multiply(max_contagiousities, max_sensitivities) > 0)
-        _, counts = np.unique(selected_cells, return_counts=True)
-        mask_zero = np.repeat(mask_zero, counts)
+        mask_zero = ((max_contagiousities > 0) & (max_sensitivities > 0))
+        _, count = np.unique(selected_cells, return_counts=True)
+        mask_zero = np.repeat(mask_zero, count)
         
         # select agents being on cells with max contagiousity and max sensitivity > 0 (and their corresponding data)
         selected_agents = selected_agents[mask_zero]
@@ -298,13 +298,18 @@ class Map:
         # Find for each cell which agent has the max contagiousity inside (it will be the contaminating agent)
         max_contagiousities, mask_max_contagiousities = group_max(data=selected_contagiousities, groups=selected_cells) 
         infecting_agents = selected_agents[mask_max_contagiousities]
-        selected_contagiousities = selected_contagiousities[mask_max_contagiousities]
+        selected_contagiousities = max_contagiousities
+
         # Select agents that can be potentially infected ("pinfected") and corresponding variables
         pinfected_mask = (selected_sensitivities > 0)
         pinfected_agents = selected_agents[pinfected_mask]
         selected_sensitivities = selected_sensitivities[pinfected_mask]
         selected_unsafeties = selected_unsafeties[pinfected_mask]
         selected_cells = selected_cells[pinfected_mask]
+        if self.verbose > 1:
+            print(f'selected_contagiousities: {selected_contagiousities}')
+            print(f'selected_sensitivities: {selected_sensitivities}')
+            print(f'selected_unsafeties: {selected_unsafeties}')
         # Group `selected_cells` and expand `infecting_agents` and `selected_contagiousities` accordingly
         # There is one and only one infecting agent by pinselected_agentsfected_cell so #`counts` == #`infecting_agents`
         _, counts = np.unique(selected_cells, return_counts=True)
@@ -315,11 +320,15 @@ class Map:
         res = np.multiply(selected_contagiousities, selected_sensitivities)
         res = np.multiply(res, selected_unsafeties)
         # Modifiy probas contamination according to `p_contagious`
+        """
         mask_p = (p_contagious < 1)
         res[mask_p] = np.multiply(res[mask_p], p_contagious[mask_p])
         res[~mask_p] = 1 - np.divide(1 - res[~mask_p], p_contagious[~mask_p])
+        """
 
         draw = np.random.uniform(size=infecting_agents.shape[0])
+        if family:
+            draw = np.zeros(infecting_agents.shape[0])
         draw = (draw < res)
         infecting_agents = infecting_agents[draw]
         infected_agents = pinfected_agents[draw]
@@ -329,12 +338,17 @@ class Map:
             print(f'Infecting and infected agents should be all different, are they? {((infecting_agents == infected_agents).sum() == 0)}')
             print(f'Number of infected agents: {n_infected_agents}')
         """
-        self.current_state_ids[infected_agents] = self.least_state_ids[infected_agents]
+        # self.current_state_ids[infected_agents] = self.least_state_ids[infected_agents]
+        self.current_state_ids[infected_agents] = 1
         self.current_state_durations[infected_agents] = 0
         self.n_infected_period += n_infected_agents
         self.infecting_agents = np.append(self.infecting_agents, infecting_agents)
         self.infected_agents = np.append(self.infected_agents, infected_agents)
         self.infected_periods = np.append(self.infected_periods, np.repeat([self.current_period], n_infected_agents))
+
+
+    def set_verbose(self, verbose):
+        self.verbose = verbose
 
 
     def move_agents(self, selected_agents):
@@ -381,14 +395,14 @@ class Map:
     def make_move(self, prop_cont_factor=10, p_mask=0):
         """ determine which agents to move, then move hem and proceed to the contamination process """
         probas_move = np.multiply(self.p_moves.flatten(),  1 - self.unique_severities[self.current_state_ids])
+        # print(f'DEBUG: mean of self.p_moves.flatten(): {np.mean(self.p_moves.flatten())}')
+        # print(f'DEBUG: make_move(): probas_move.shape[0]: {probas_move.shape[0]}, mean: {np.mean(probas_move)}')
         draw = np.random.uniform(size=probas_move.shape[0])
         draw = (draw < probas_move)
         selected_agents = self.agent_ids[draw]
         selected_agents, selected_cells = self.move_agents(selected_agents)
-        """
         if self.verbose > 1:
-            print(f'{selected_agents.shape[0]} agents selected for moving')
-        """
+            print(f'{selected_agents.shape[0]} agents selected for moving in {np.unique(selected_cells).shape[0]} distinct cells')
         self.contaminate(selected_agents, selected_cells, prop_cont_factor, p_mask)
 
 
@@ -398,9 +412,9 @@ class Map:
         to_transit = (self.current_state_durations == agents_durations)
         self.current_state_durations += 1
         to_transit = self.agent_ids[to_transit]
-        self.transit_states(to_transit, tracing_rate)
+        new_states = self.transit_states(to_transit, tracing_rate)
         # Contamination at home by end of the period
-        self.contaminate(self.agent_ids, self.home_cell_ids)
+        self.contaminate(self.agent_ids, self.home_cell_ids, family=True)
         # Update r and associated variables
         r = self.n_infected_period / self.n_diseased_period if self.n_diseased_period > 0 else 0
         if self.verbose > 1:
@@ -411,6 +425,7 @@ class Map:
         # tracing
         #Move one period forward
         self.current_period += 1
+        return new_states
 
     
     def transit_states(self, agent_ids_transit, tracing_rate=0):
@@ -424,6 +439,7 @@ class Map:
         # Select new states according to transition matrix
         new_states = vectorized_choice(transitions)
         self.change_state_agents(agent_ids_transit, new_states, tracing_rate)
+        return new_states
 
 
     def get_states_numbers(self):
@@ -455,7 +471,7 @@ class Map:
             new_infected_agents = agent_ids[new_state_ids == 4]
             # Index of agents that just got to state "infected" in `self.infected_agents`
             inds_nia = get_ind_in_arr(self.infecting_agents, new_infected_agents)
-            infected_by_nia = self.infected_agents[inds_nia]
+            infected_by_nia = self.infected_agents[inds_nia].astype(np.uint32)
             mask_traced = np.random.binomial(1, p=tracing_rate, size=infected_by_nia)
             mask_traced = (mask_traced > 0)
             traced_agents = infected_by_nia[mask_traced].astype(np.uint32)
@@ -592,6 +608,7 @@ class Map:
         self.current_state_ids = current_state_ids
         self.current_state_durations = current_state_durations  # how long the agents are already in their current state
         self.durations = np.squeeze(durations) # 2d, one row for each agent
+        self.current_state_durations = np.minimum(self.current_state_durations, self.durations)
         self.transitions_ids = transitions_ids
 
         # for cells: cell_ids, attractivities, unsafeties, xcoords, ycoords

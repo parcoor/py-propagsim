@@ -28,6 +28,23 @@ states2ids = {state: i for i, state in enumerate(states)}
 
 DATA_DIR = os.path.join(*['..', '..', 'data'])
 
+def get_alpha_beta(min_value, max_value, mean_value):
+    """ for the duration on a state, draw from a beta distribution with parameter alpha and beta """
+    x = (mean_value - min_value) / (max_value - min_value)
+    z = 1 / x - 1
+    a, b = 2, 2 * z
+    return a, b
+
+
+def draw_beta(min_value, max_value, mean_value, n_values, round=False):
+    """ draw `n_values` values between `min_value` and `max_value` having
+    `mean_value` as (asymptotical) average"""
+    a, b = get_alpha_beta(min_value, max_value, mean_value)
+    durations = np.random.beta(a, b, n_values) * (max_value - min_value) + min_value
+    if round:
+        durations = np.around(durations)
+    return durations.reshape(-1, 1)
+
 def get_under_params(mean, mediane):
     mu = np.log(mediane)
     sigma = np.sqrt(2 * (np.log(mean) - mu))
@@ -113,14 +130,20 @@ def get_current_state_durations(split_pop, state_mm, day):
                 state_durations = np.ones(n_state) * -1
                 current_state_durations = np.append(current_state_durations, state_durations)
                 continue
-            if state == 'asymptomatic':
-                state_durations = np.ones(n_state) * 6
+            if state in ['asymptomatic', 'infected']:
+                rate = sum([1.15 ** i for i in range(5)])
+                per_durations = np.array([(n_state/rate) * 1.15 ** i for i in range(5)]).astype(np.uint32)
+                unique_duration = np.arange(1, 6)
+                state_durations = np.repeat(unique_duration, per_durations).astype(np.uint32)
+                to_pad = n_state - state_durations.shape[0]
+                if to_pad >= 1:
+                    state_durations = np.append(state_durations, np.ones(to_pad))
                 current_state_durations = np.append(current_state_durations, state_durations)
                 continue
             mean, mediane = state_mm.get(state)
             # TODO: check state_durations
             if state_id == 5:
-                mediane = mediane -2
+                mediane = mediane - .2
                 state_durations = draw_lognormal(.75*mean, .75*mediane, n_state)
             else:
                 state_durations = draw_lognormal(2.5*mean, 2.5*mediane, n_state)
@@ -194,16 +217,14 @@ def get_transitions(split_pop):
 
 
 def get_p_moves(n_agents, avg):
-    # a, b = 3 * avg / (1 - avg), 3
-    a, b = 2, 2 * (1 - avg) / avg  # better
-    p_moves = np.random.beta(a, b, n_agents)
-    return p_moves
+    return draw_beta(0, 1, avg, n_agents).flatten()
+
 
 def evaluate(evaluations, day, n_periods):
     df = pd.read_csv(os.path.join(DATA_DIR, 'overall_cases.csv'))
     df['day'] = pd.to_datetime(df['day'])
     day_start = day + timedelta(days=1)
-    day_end = day + timedelta(days=n_periods)
+    day_end = day + timedelta(days=n_periods+1)
     df = df.loc[(df['day'] >= day_start) & (df['day'] <= day_end)]
 
     res = {}
