@@ -41,42 +41,59 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
 
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
     inter_square_dists = cdist(coords_squares, coords_squares[eligible_squares,:], 'euclidean').astype(np.float32)
-    square_sampling_probas = np.multiply(inter_square_dists, -0.1 * dscale)
+    square_sampling_probas = np.multiply(inter_square_dists, -1 * dscale)
     square_sampling_probas = np.exp(square_sampling_probas)
     square_sampling_probas *= sum_attractivity_squares[None,:]  # row-wise multiplication
     square_sampling_probas /= norm(square_sampling_probas, ord=1, axis=1, keepdims=True)
-    square_sampling_probas = square_sampling_probas.astype(np.float32) 
+    square_sampling_probas = square_sampling_probas.astype(np.float32)
     return square_sampling_probas
 
 
 def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
-    unique_square_ids, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)
+    """
+    Compute the probability array for sampling cells given squares
+    `attractivity_cells` and `square_ids_cells` should be aligned the same way to the underlying cells
+    **WARNING**: complex and sensitive part. Be careful and test if you modify it.
+    :param attractivity_cells: attractivity of the eligible cells (where the agents can potentially move)
+    :param square_ids_cells: id of the square of those cells
+    :return: `cell_sampling_probas`: each row corresponds to a square and each col inside to one of its cell,
+    `cell_index_shift`: for each row (square) the shift to get the original sequential cell_id,
+    `order` order of the original underlying cell ids compared to the sequential cell ids
+    Both `cell_index_shift` and `order` are necessary to find the original ids of the cells sampled with `cell_sampling_probas`
+    """
+    seq_cell_ids = np.arange(0, attractivity_cells.shape[0]).astype(np.uint32)
+    # Re ordering everything to have cell 0, 1, 2 of square 0, cell 0, 1 of square 1 etc.
+    order = np.lexsort((seq_cell_ids, square_ids_cells))
+    seq_cell_ids = seq_cell_ids[order]
+    square_ids_cells = square_ids_cells[order]
+    attractivity_cells = attractivity_cells[order]
+
+    _, inverse, counts = np.unique(square_ids_cells, return_inverse=True, return_counts=True)
     # `inverse` is an re-numering of `square_ids_cells` following its order: 3, 4, 6 => 0, 1, 2
     width_sample = np.max(counts)
+    seq_unique_square_ids = np.arange(0, counts.shape[0]).astype(np.uint32)
+    seq_unique_square_ids = np.repeat(seq_unique_square_ids, counts)  # now squares: 0, 0, 1, 1, 1, 2...
     # create a sequential index dor the cells in the squares: 
     # 1, 2, 3... for the cells in the first square, then 1, 2, .. for the cells in the second square
     # Trick: 1. shift `counts` one to the right, remove last element and append 0 at the beginning:
     cell_index_shift = np.insert(counts, 0, 0)[:-1]
     cell_index_shift = np.cumsum(cell_index_shift)  # [0, ncells in square0, ncells in square 1, etc...]
     to_subtract = np.repeat(cell_index_shift, counts)  # repeat each element as many times as the corresponding square has cells
-
-    inds_cells_in_square = np.arange(0, attractivity_cells.shape[0])
-    inds_cells_in_square = np.subtract(inds_cells_in_square, to_subtract)  # we have the right sequential order
-
-    order = np.argsort(inverse)
-    inverse = inverse[order]
-    attractivity_cells = attractivity_cells[order]
+    # inds_cells_in_square = inds_cells_in_square[order]
+    seq_cell_ids_bis = np.arange(0, to_subtract.shape[0])
+    inds_cells_in_square = np.subtract(seq_cell_ids_bis, to_subtract)  # we have the right sequential order
 
     # Create `sample_arr`: one row for each square. The values first value in each row are the attractivity of its cell. Padded with 0.
-    cell_sampling_probas = np.zeros((unique_square_ids.shape[0], width_sample))
-    cell_sampling_probas[inverse, inds_cells_in_square] = attractivity_cells
+    cell_sampling_probas = np.zeros((counts.shape[0], width_sample))
+    cell_sampling_probas[seq_unique_square_ids, inds_cells_in_square] = attractivity_cells
     # Normalize the rows of `sample_arr` s.t. the rows are probability distribution
     cell_sampling_probas /= np.linalg.norm(cell_sampling_probas, ord=1, axis=1, keepdims=True).astype(np.float32)
-    return cell_sampling_probas, cell_index_shift
+
+    return cell_sampling_probas, cell_index_shift, order
 
 
 def vectorized_choice(prob_matrix,axis=1):
-    """ 
+    """
     selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise 
     see https://stackoverflow.com/questions/34187130/fast-random-weighted-selection-across-all-rows-of-a-stochastic-matrix
     """
@@ -101,7 +118,7 @@ def group_max(data, groups):
 def sum_by_group(values, groups):
     """ see: https://stackoverflow.com/questions/4373631/sum-array-by-number-in-numpy 
     alternative method with meshgrid led to memory error """
-    order = np.argsort(groups)
+    order = np.argsort(groups).astype(np.uint32)
     groups = groups[order]
     values = values[order]
     values = np.cumsum(values)

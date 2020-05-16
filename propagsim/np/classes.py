@@ -179,22 +179,22 @@ class Map:
         self.unique_sensitivities = np.array(self.unique_sensitivities, dtype=np.float32)
         self.unique_severities = np.array(self.unique_severities, dtype=np.float32)
 
-        self.cell_ids, xcoords, ycoords, attractivities, self.unsafeties = [], [], [], [], []
+        self.cell_ids, self.attractivities, xcoords, ycoords, self.unsafeties = [], [], [], [], []
         for cell in cells:
             self.cell_ids.append(cell.get_id())
             coords = cell.get_position()
             xcoords.append(coords[0])
             ycoords.append(coords[1])
-            attractivities.append(cell.get_attractivity())
+            self.attractivities.append(cell.get_attractivity())
             self.unsafeties.append(cell.get_unsafety())
 
         self.cell_ids = np.array(self.cell_ids, dtype=np.uint32)
         xcoords, ycoords = np.array(xcoords, dtype=np.float32), np.array(ycoords, dtype=np.float32)
-        attractivities = np.array(attractivities, dtype=np.float32)
+        self.attractivities = np.array(self.attractivities, dtype=np.float32)
         self.unsafeties = np.array(self.unsafeties, dtype=np.float32)
         # Compute inter-squares proba transition matrix
         self.coords_squares, self.square_ids_cells = squarify(xcoords, ycoords)
-        self.set_attractivities(attractivities)
+        self.set_attractivities(self.attractivities)
         # Process agent
         self.agent_ids = []
         self.p_moves = []
@@ -216,15 +216,15 @@ class Map:
             self.current_state_ids.append(agent.get_current_state_id())
             self.current_state_durations.append(agent.get_current_state_duration())
             transitions_id = agent.get_transitions_id()
-            if transitions_id not in self.transitions_ids:
-                self.transitions_ids.append(transitions_id)
-                self.transitions.append(agent.get_transitions_arr())
+            self.transitions_ids.append(transitions_id)
+            self.transitions.append(agent.get_transitions_arr())
             self.durations.append(np.array(agent.get_durations(), dtype=np.float32))
 
         self.agent_ids = np.array(self.agent_ids, dtype=np.float32)
         self.p_moves = np.array(self.p_moves, dtype=np.float32)
         self.least_state_ids = np.array(self.least_state_ids, dtype=np.uint8)
         self.home_cell_ids = np.array(self.home_cell_ids, dtype=np.uint32)
+        print(f'DEBUG: self.cell_ids: {self.cell_ids}')
         self.current_state_ids = np.array(self.current_state_ids, dtype=np.uint8)  # no more than 255 possible states
         self.current_state_durations = np.array(self.current_state_durations, dtype=np.float32)
         self.transitions_ids = np.array(self.transitions_ids, dtype=np.uint8)  # no more than 255 possible transitions
@@ -239,6 +239,9 @@ class Map:
         self.transitions = np.cumsum(self.transitions, axis=1)
 
         self.durations = np.vstack(self.durations)
+        self.durations = self.durations[order]
+        self.agent_ids = self.agent_ids[order]
+
         # Compute probas_move for agent selection
         # Define variable for monitoring the propagation (r factor, contagion chain)
         self.n_contaminated_period = 0  # number of agent contaminated during current period
@@ -281,10 +284,6 @@ class Map:
         mask_zero = ((max_contagiousities > 0) & (max_sensitivities > 0))
         _, count = np.unique(selected_cells, return_counts=True)
         mask_zero = np.repeat(mask_zero, count)
-        mask_zero = (np.multiply(max_contagiousities, max_sensitivities) > 0)
-        _, counts = np.unique(selected_cells, return_counts=True)
-        mask_zero = np.repeat(mask_zero, counts)
-        
         # select agents being on cells with max contagiousity and max sensitivity > 0 (and their corresponding data)
         selected_agents = selected_agents[mask_zero]
         selected_contagiousities = selected_contagiousities[mask_zero]
@@ -338,12 +337,14 @@ class Map:
         if family:
             draw = np.zeros(infecting_agents.shape[0])
 
+        draw = (draw < res)
+
+        """
         mask_p = (p_contagious < 1)
         res[mask_p] = np.multiply(res[mask_p], p_contagious[mask_p])
         res[~mask_p] = 1 - np.divide(1 - res[~mask_p], p_contagious[~mask_p])
+        """
 
-        draw = np.random.uniform(size=infecting_agents.shape[0])
-        draw = (draw < res)
         infecting_agents = infecting_agents[draw]
         infected_agents = pinfected_agents[draw]
         n_infected_agents = infected_agents.shape[0]
@@ -373,53 +374,47 @@ class Map:
         selected_agents = selected_agents.astype(np.uint32)
         agents_squares_to_move = self.agent_squares[selected_agents]
 
-        order = np.argsort(agents_squares_to_move)
-        selected_agents = selected_agents[order]
-        agents_squares_to_move = agents_squares_to_move[order]
-        # Compute number of agents by square
-        unique_square_ids, counts = np.unique(agents_squares_to_move, return_counts=True)
-        # Select only rows corresponding to squares where there are agents to move
-        square_sampling_ps = self.square_sampling_probas[unique_square_ids,:]
-        # Apply "repeat sample" trick
-        square_sampling_ps = np.repeat(square_sampling_ps, counts, axis=0)
+        print(f'DEBUG move_agents(): {selected_agents.shape[0]} selected to move')
+        # DEBUG
+        home_squares = self.square_ids_cells[self.home_cell_ids[selected_agents]]
+        n_equal = (agents_squares_to_move == home_squares).sum()
+        print(f'DEBUG: home square match: {(n_equal / selected_agents.shape[0] * 100)}%')
+
+        _, inverse = np.unique(agents_squares_to_move, return_inverse=True)
+        # Align `square_sampling_probas` with agents (their square)
+        square_sampling_ps = self.square_sampling_probas[inverse,:]
         # Chose one square for each row (agent), considering each row as a sample proba
         selected_squares = vectorized_choice(square_sampling_ps)
-        order = np.argsort(selected_squares)
-        selected_agents = selected_agents[order]
-        selected_squares = selected_squares[order]
-        """
-        if self.verbose > 1:
-            print(f'{(agents_squares_to_move != selected_squares).sum()}/{selected_agents.shape[0]} agents moving outside of their square')
-        """
+
+        print(f'DEBUG move_agents(): {selected_squares.shape[0]} squares selected where to move agents (should be {selected_agents.shape[0]})')
         # Now select cells in the squares where the agents move
-        unique_selected_squares, counts = np.unique(selected_squares, return_counts=True)
-        unique_selected_squares = unique_selected_squares.astype(np.uint16)
-        max_sq = self.cell_sampling_probas.shape[0] - 1
-        unique_selected_squares[unique_selected_squares > max_sq] = max_sq
 
 
-
-
-        cell_sampling_ps = self.cell_sampling_probas[unique_selected_squares,:]
-        cell_sampling_ps = np.repeat(cell_sampling_ps, counts, axis=0)
+        cell_sampling_ps = self.cell_sampling_probas[selected_squares,:]
+        index_shift = self.cell_index_shift[selected_squares]
         cell_sampling_ps = cell_sampling_ps.astype(np.float16)  # float16 to avoid max memory error, precision should be enough
         selected_cells = vectorized_choice(cell_sampling_ps)
         # Now we have like "cell 2 in square 1, cell n in square 2 etc." we have to go back to the actual cell id
         max_is = self.cell_index_shift.shape[0] - 1
         selected_squares[selected_squares > max_is] = max_is
-        index_shift = self.cell_index_shift[selected_squares]
+
         selected_cells = np.add(selected_cells, index_shift)
+        selected_cells = self.order_eligible_cells[selected_cells]
+        selected_cells = self.eligible_cells[selected_cells]
+        # DEBUG
+        # attractivity_selected_cells = self.attractivities[selected_cells]
+        # print(f'DEBUG: attractivity selected cells:\n{attractivity_selected_cells}')
+        selected_squares = self.square_ids_cells[selected_cells]
+        home_squares = self.square_ids_cells[self.home_cell_ids[selected_agents]]
+        n_equal = (agents_squares_to_move == home_squares).sum()
+        n_out = (home_squares != selected_squares).sum()
+        if self.verbose > 2:
+            print(f'INFO: {n_out}/{selected_agents.shape[0]} moving out of their squares {round(n_out / selected_agents.shape[0] * 100, 2)}%')
         # return selected_agents since it has been re-ordered
         return selected_agents, selected_cells
 
 
     def make_move(self, prop_cont_factor=10, p_mask=0):
-        """ determine which agents to move, then move hem and proceed to the contamination process """
-        probas_move = np.multiply(self.p_moves.flatten(),  1 - self.unique_severities[self.current_state_ids])
-        # print(f'DEBUG: mean of self.p_moves.flatten(): {np.mean(self.p_moves.flatten())}')
-        # print(f'DEBUG: make_move(): probas_move.shape[0]: {probas_move.shape[0]}, mean: {np.mean(probas_move)}')
-
-
         """ determine which agents to move, then move hem and proceed to the contamination process """
         probas_move = np.multiply(self.p_moves.flatten(),  1 - self.unique_severities[self.current_state_ids])
         draw = np.random.uniform(size=probas_move.shape[0])
@@ -522,7 +517,8 @@ class Map:
         dsave['unique_sensitivities'] =  self.unique_sensitivities, 
         dsave['unique_severities'] =  self.unique_severities, 
         dsave['cell_ids'] =  self.cell_ids, 
-        dsave['unsafeties'] = self.unsafeties, 
+        dsave['unsafeties'] = self.unsafeties,
+        dsave['attractivities'] = self.attractivities
         dsave['square_sampling_probas'] =  self.square_sampling_probas, 
         dsave['eligible_cells'] =  self.eligible_cells,
         dsave['coords_squares'] =  self.coords_squares,
@@ -576,6 +572,7 @@ class Map:
         self.unique_severities = np.squeeze(np.load(os.path.join(savedir, 'unique_severities.npy')))
         self.cell_ids = np.squeeze(np.load(os.path.join(savedir, 'cell_ids.npy')))
         self.unsafeties = np.squeeze(np.load(os.path.join(savedir, 'unsafeties.npy')))
+        self.attractivities = np.squeeze(np.load(os.path.join(savedir, 'attractivities.npy')))
         self.square_sampling_probas = np.squeeze(np.load(os.path.join(savedir, 'square_sampling_probas.npy')))
         self.eligible_cells = np.squeeze(np.load(os.path.join(savedir, 'eligible_cells.npy')))
         self.coords_squares = np.squeeze(np.load(os.path.join(savedir, 'coords_squares.npy')))
@@ -677,6 +674,7 @@ class Map:
         self.unsafeties = unsafeties
 
     def set_attractivities(self, attractivities):
+        self.attractivities = attractivities
         self.square_sampling_probas = get_square_sampling_probas(attractivities, 
                                                         self.square_ids_cells, 
                                                         self.coords_squares,  
@@ -684,7 +682,7 @@ class Map:
         mask_eligible = np.where(attractivities > 0)[0]  # only cells with attractivity > 0 are eligible for a move
         self.eligible_cells = self.cell_ids[mask_eligible]
         # Compute square to cell transition matrix
-        self.cell_sampling_probas, self.cell_index_shift = get_cell_sampling_probas(attractivities[mask_eligible], self.square_ids_cells[mask_eligible])
+        self.cell_sampling_probas, self.cell_index_shift, self.order_eligible_cells = get_cell_sampling_probas(attractivities[mask_eligible], self.square_ids_cells[mask_eligible])
         # Compute upfront cumulated sum of sampling matrices
         self.square_sampling_probas = np.cumsum(self.square_sampling_probas, axis=1)
         self.cell_sampling_probas = np.cumsum(self.cell_sampling_probas, axis=1)
