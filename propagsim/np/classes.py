@@ -224,7 +224,6 @@ class Map:
         self.p_moves = np.array(self.p_moves, dtype=np.float32)
         self.least_state_ids = np.array(self.least_state_ids, dtype=np.uint8)
         self.home_cell_ids = np.array(self.home_cell_ids, dtype=np.uint32)
-        print(f'DEBUG: self.cell_ids: {self.cell_ids}')
         self.current_state_ids = np.array(self.current_state_ids, dtype=np.uint8)  # no more than 255 possible states
         self.current_state_durations = np.array(self.current_state_durations, dtype=np.float32)
         self.transitions_ids = np.array(self.transitions_ids, dtype=np.uint8)  # no more than 255 possible transitions
@@ -374,21 +373,14 @@ class Map:
         selected_agents = selected_agents.astype(np.uint32)
         agents_squares_to_move = self.agent_squares[selected_agents]
 
-        print(f'DEBUG move_agents(): {selected_agents.shape[0]} selected to move')
-        # DEBUG
-        home_squares = self.square_ids_cells[self.home_cell_ids[selected_agents]]
-        n_equal = (agents_squares_to_move == home_squares).sum()
-        print(f'DEBUG: home square match: {(n_equal / selected_agents.shape[0] * 100)}%')
-
         _, inverse = np.unique(agents_squares_to_move, return_inverse=True)
         # Align `square_sampling_probas` with agents (their square)
         square_sampling_ps = self.square_sampling_probas[inverse,:]
         # Chose one square for each row (agent), considering each row as a sample proba
         selected_squares = vectorized_choice(square_sampling_ps)
-
-        print(f'DEBUG move_agents(): {selected_squares.shape[0]} squares selected where to move agents (should be {selected_agents.shape[0]})')
+        max_sq = self.square_sampling_probas.shape[1] - 1
+        selected_squares[selected_squares > max_sq] = max_sq
         # Now select cells in the squares where the agents move
-
 
         cell_sampling_ps = self.cell_sampling_probas[selected_squares,:]
         index_shift = self.cell_index_shift[selected_squares]
@@ -401,14 +393,11 @@ class Map:
         selected_cells = np.add(selected_cells, index_shift)
         selected_cells = self.order_eligible_cells[selected_cells]
         selected_cells = self.eligible_cells[selected_cells]
-        # DEBUG
-        # attractivity_selected_cells = self.attractivities[selected_cells]
-        # print(f'DEBUG: attractivity selected cells:\n{attractivity_selected_cells}')
-        selected_squares = self.square_ids_cells[selected_cells]
-        home_squares = self.square_ids_cells[self.home_cell_ids[selected_agents]]
-        n_equal = (agents_squares_to_move == home_squares).sum()
-        n_out = (home_squares != selected_squares).sum()
+
         if self.verbose > 2:
+            selected_squares = self.square_ids_cells[selected_cells]
+            home_squares = self.square_ids_cells[self.home_cell_ids[selected_agents]]
+            n_out = (home_squares != selected_squares).sum()
             print(f'INFO: {n_out}/{selected_agents.shape[0]} moving out of their squares {round(n_out / selected_agents.shape[0] * 100, 2)}%')
         # return selected_agents since it has been re-ordered
         return selected_agents, selected_cells

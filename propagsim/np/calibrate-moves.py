@@ -12,8 +12,9 @@ if not os.path.isdir(CALIBRATION_DIR):
     os.makedirs(CALIBRATION_DIR)
 
 # FIXED
+N_AGENT_INFECTED_START = 1000
 DAY = datetime(2020, 4, 20)
-N_PERIODS = 6
+N_PERIODS = 12
 N_AGENTS = 700000
 AVG_AGENTS_HOME = 2.2
 N_HOME_CELLS = int(N_AGENTS / AVG_AGENTS_HOME)
@@ -53,18 +54,18 @@ def get_random_parameters():
     pdict['n_moves_per_period'] = np.random.choice(np.arange(5, 12)).astype(np.uint16)
     avg_agent_move = np.random.uniform(1.5, pdict['n_moves_per_period'] - 1)
     pdict['avg_p_move'] = avg_agent_move / pdict['n_moves_per_period']
-    pdict['dscale'] = np.random.uniform(10, 60)
-    pdict['density_factor'] = np.random.uniform(2, 10)
+    pdict['dscale'] = np.random.uniform(.01, 2)
+    pdict['density_factor'] = np.random.uniform(1, 5)
     pdict['avg_unsafety'] = np.random.uniform(.8, .9)  # scenario where nothing implemented to secure places
     pdict['avg_attractivity'] = np.random.uniform(.2, .8)
-    pdict['contagiousity_infected'] = np.random.uniform(.5, .9)
+    pdict['contagiousity_infected'] = np.random.uniform(.7, .9)
     pdict['contagiousity_asympcont'] = np.random.uniform(0, pdict['contagiousity_infected'] / 2)
     pdict['contagiousity_recovercont'] = np.random.uniform(0, pdict['contagiousity_infected'] / 2)
     pdict['mean_infected_t'] = np.random.uniform(4.5, 8)
     pdict['severity_infected'] = np.random.uniform(.6, .75)  # the value of quarantine time could be kept after
     pdict['severity_recovercont'] = np.random.uniform(0, (2/3) * pdict['severity_infected'])
     pdict['mean_asymptomatic_t'] = np.random.uniform(3.5, 4.5)
-    pdict['n_squares_axis'] = int(np.random.uniform(73, 115))
+    pdict['n_squares_axis'] = 100  # eech square is ~2km2 in 1/100 France
     pdict['prop_cont_factor'] = np.random.uniform(1, 9)
     return pdict
 
@@ -115,7 +116,7 @@ def build_parameters(current_period=0, verbose=0):
     transitions = get_transitions(split_pop)
     durations = get_durations(split_pop, state_mm)
     n_agents_generated = durations.shape[0]
-    current_state_ids, current_state_durations = get_current_state_durations(n_agents_generated)
+    current_state_ids, current_state_durations = get_current_state_durations(n_agents_generated, N_AGENT_INFECTED_START)
     agent_ids = np.arange(0, n_agents_generated).astype(np.uint32)
     home_cell_ids = np.random.choice(np.arange(0, N_HOME_CELLS), size=n_agents_generated).astype(np.uint32)
     p_moves = get_p_moves(n_agents_generated, pdict['avg_p_move'])
@@ -138,11 +139,11 @@ def build_parameters(current_period=0, verbose=0):
 
 
 def evaluate_move(evaluations):
-    ind_start = 0
+    ind_start = 6
     evaluations = evaluations[ind_start:]
     n_asymptomatics = []
     for evaluation in evaluations:
-        ind_asymptomatic = np.where(evaluation[0] == 1)[0][0].astype(np.uint32)
+        ind_asymptomatic = np.where((evaluation[0] == 1) | (evaluation[0] == 2) | (evaluation[0] == 3))[0][0].astype(np.uint32)
         n_asymptomatic = evaluation[1][ind_asymptomatic]
         n_asymptomatics.append(n_asymptomatic)
     print(f'DEBUG: n_asymptomatics: {n_asymptomatics}')
@@ -174,10 +175,7 @@ def run_calibration(n_rounds, current_period=0, verbose=0):
             memory_error = False
             continue
 
-        stop = False
         for prd in range(N_PERIODS):
-            if stop:
-                continue
             for _ in range(pdict['n_moves_per_period']):
                 map.make_move(prop_cont_factor=pdict['prop_cont_factor'])
             map.forward_all_cells()
@@ -187,10 +185,8 @@ def run_calibration(n_rounds, current_period=0, verbose=0):
             if prd == 6:
                 ind_asymptomatic = np.where(evaluation[0] == 1)[0][0].astype(np.uint32)
                 n_asymptomatic = evaluation[1][ind_asymptomatic]
-                if n_asymptomatic <= 10000 or n_asymptomatic >= 16000:
-                    print('Intermediary result to bad, jumping to next set of parameters')
-                    stop = True
             evaluations.append(evaluation)
+
         score, progressions = evaluate_move(evaluations)
 
         if best_score is None or score < best_score:
