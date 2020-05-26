@@ -3,17 +3,17 @@ import cupy as cp
 from time import time
 
 
-N_PERIODS = 3
+N_PERIODS = 10
 N_MOVES_PER_PERIOD = 4
 AVG_P_MOVE = .5 / N_MOVES_PER_PERIOD
 N_AGENTS = 700000
 PROP_INFECTED_AGENTS_START = 1 / 400
-N_SQUARES_AXIS = 125
+N_SQUARES_AXIS = 200
 AVG_AGENTS_HOME = 2.2
 N_HOME_CELLS = int(N_AGENTS / AVG_AGENTS_HOME)
 PROP_PUBLIC_CELLS = 1 / 70  # there is one public place for 70 people in France
 N_CELLS = int(N_HOME_CELLS + N_AGENTS * PROP_PUBLIC_CELLS)
-DSCALE = 30
+DSCALE = 0.1
 AVG_UNSAFETY = .5
 
 with cp.cuda.Device(0):
@@ -88,10 +88,6 @@ with cp.cuda.Device(0):
     transitions = cp.stack([transitions_15, transitions_15_44, transitions_45_64, transitions_65_74, transitions_75], axis=2)
 
 
-
-
-
-
     # Define Cells
     cell_ids = cp.arange(0, N_CELLS).astype(cp.uint32)
     attractivities = cp.random.uniform(size=N_CELLS)
@@ -104,6 +100,7 @@ with cp.cuda.Device(0):
     unique_sensitivities = cp.array([1, 0, 0, 0, 0, 0, 0])
     unique_severities = cp.array([0, .1, .8, 1, 1, 1, 0])
     transitions = cp.stack((transitions_15, transitions_15_44, transitions_45_64, transitions_65_74, transitions_75), axis=2)
+    print(f'DEBUG: (benchmark) transitions.shape: {transitions.shape} (should be (7, 7, 5))')
     # Define Agents
     agent_ids = cp.arange(0, N_AGENTS).astype(cp.uint32)
     home_cell_ids = cp.random.choice(range(N_HOME_CELLS), N_AGENTS).astype(cp.uint32)
@@ -111,7 +108,7 @@ with cp.cuda.Device(0):
     least_state_ids = cp.ones(N_AGENTS)  # least severe state is state 1 for all agents
     current_state_ids = cp.random.binomial(1, p=PROP_INFECTED_AGENTS_START, size=N_AGENTS).astype(cp.uint8)
     current_state_durations = cp.zeros(N_AGENTS)
-    transitions_ids = cp.random.choice(unique_state_ids, size=N_AGENTS).astype(cp.uint32)
+    transitions_ids = cp.random.choice(cp.arange(0, transitions.shape[2]), size=N_AGENTS).astype(cp.uint32)
     # # State durations for each agent
     durations_healthy = durations_dead = durations_recovered = cp.ones(shape=(N_AGENTS, 1)) * -1
     durations_asymptomatic = draw_beta(1, 14, 5, N_AGENTS, True)
@@ -119,15 +116,14 @@ with cp.cuda.Device(0):
     durations_hospital = draw_beta(1, 8, 4, N_AGENTS, True)
     durations_reanimation = draw_beta(15, 30, 21, N_AGENTS, True)
 
-    durations = cp.stack((durations_healthy, durations_asymptomatic, durations_mild, durations_hospital, durations_reanimation), axis=1)
+
+    durations = cp.stack((durations_healthy, durations_asymptomatic, durations_mild, durations_hospital, durations_reanimation, durations_dead, durations_recovered), axis=1)
 
     # =========== Map =============
 
-    map = Map(cell_ids, attractivities, unsafeties, xcoords, ycoords, unique_state_ids, 
-            unique_contagiousities, unique_sensitivities, unique_severities, transitions, agent_ids, home_cell_ids, p_moves, least_state_ids,
-            current_state_ids, current_state_durations, durations, transitions_ids, dscale=DSCALE, current_period=0, verbose=0)
-
-
+    map = Map(cell_ids, attractivities, unsafeties, xcoords, ycoords, unique_state_ids,
+              unique_contagiousities, unique_sensitivities, unique_severities, transitions, agent_ids, home_cell_ids, p_moves, least_state_ids,
+              current_state_ids, current_state_durations, durations, transitions_ids, dscale=1, current_period=0, verbose=3)
 
 
     stats = {}
@@ -143,8 +139,8 @@ with cp.cuda.Device(0):
         map.forward_all_cells()
         states_ids, state_numbers = map.get_states_numbers()
         states_ids, state_numbers = states_ids.tolist(), state_numbers.tolist()
-        # stats[i] = {states_ids[k]: state_numbers[k] for k in range(len(states_ids))}
+        stats[i] = {states_ids[k]: state_numbers[k] for k in range(len(states_ids))}
         print(f'period {i} computed in {time() - t0}s')
 
     print(f'duration: {time() - t_start}s')
-    # print(stats)
+    print(stats)

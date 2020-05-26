@@ -30,8 +30,8 @@ def get_least_severe_state(states):
 
 
 def squarify(xcoords, ycoords):
-    xcoords_square = xcoords.astype(cp.int32)
-    ycoords_square = ycoords.astype(cp.int32) 
+    xcoords_square = xcoords.astype(cp.uint32)
+    ycoords_square = ycoords.astype(cp.uint32)
     # Trick for finding unique couples of  of (xcoords_square, ycoords_square) by comparing their sum and subtraction
     # (because cupy doesn't support unique by axis)
     xy_plus = cp.add(xcoords_square, ycoords_square)
@@ -41,14 +41,14 @@ def squarify(xcoords, ycoords):
     _, id_minus = cp.unique(xy_minus, return_index=True)
 
     unique_indices = append(id_plus, id_minus).astype(cp.uint32)
-    unique_indices = cp.unique(unique_indices)
+    unique_indices, square_ids_cells = cp.unique(unique_indices, return_inverse=True)
 
     xcoords_unique = xcoords_square[unique_indices]
     ycoords_unique = ycoords_square[unique_indices]
 
-    square_ids_cells = cp.arange(0, xcoords_unique.shape[0])
-    coords_squares = cp.vstack((xcoords_unique, ycoords_unique)).T
-    return coords_squares, square_ids_cells
+    coords_squares = cp.squeeze(cp.stack((xcoords_unique, ycoords_unique), axis=0))
+    print(f'DEBUG: coords_squares.shape: {coords_squares.shape}, square_ids_cells.shape: {square_ids_cells.shape}')
+    return coords_squares, square_ids_cells.astype(cp.uint32)
 
 
 def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squares, dscale=1):
@@ -57,62 +57,66 @@ def get_square_sampling_probas(attractivity_cells, square_ids_cells, coords_squa
     # Compute distances between all squares and squares having sum_attractivity > 0
     mask_attractivity = (sum_attractivity_squares > 0)
     eligible_squares = unique_squares[mask_attractivity]
+    print(f'DEBUG: eligible_squares.shape: {eligible_squares.shape}')
     sum_attractivity_squares = sum_attractivity_squares[mask_attractivity]
 
     # Compute distance between cells, add `intra_square_dist` for average intra cell distance
-    inter_square_dists = cdist(coords_squares).astype(cp.float32)
-    inter_square_dists = inter_square_dists[:,eligible_squares]
-    square_sampling_probas = cp.multiply(inter_square_dists, -dscale)
+    print(f'DEBUG: coords_squares.shape: {coords_squares.shape}')
+    inter_square_dists = cdist(coords_squares, coords_squares[:,eligible_squares])
+    print(f'DEBUG: inter_square_dists.shape: {inter_square_dists.shape}')
+    square_sampling_probas = cp.multiply(inter_square_dists, -1 * dscale)
     square_sampling_probas = cp.exp(square_sampling_probas)
     square_sampling_probas *= sum_attractivity_squares[None,:]  # row-wise multiplication
     square_sampling_probas /= cp.linalg.norm(square_sampling_probas, ord=1, axis=1, keepdims=True)
-    square_sampling_probas = square_sampling_probas.astype(cp.float32) 
+    square_sampling_probas = square_sampling_probas.astype(cp.float32)
+    print(f'DEBUG: square_sampling_probas.shape: {square_sampling_probas.shape}')
     return square_sampling_probas
 
 
 def get_cell_sampling_probas(attractivity_cells, square_ids_cells):
-    unique_square_ids, inverse, counts = cp.unique(square_ids_cells, return_inverse=True, return_counts=True)
+    seq_cell_ids = cp.arange(0, attractivity_cells.shape[0]).astype(cp.uint32)
+    # Re ordering everything to have cell 0, 1, 2 of square 0, cell 0, 1 of square 1 etc.
+    order = cp.lexsort(cp.stack([seq_cell_ids, square_ids_cells], axis=0))
+    square_ids_cells = square_ids_cells[order]
+    attractivity_cells = attractivity_cells[order]
+
+    _, inverse, counts = cp.unique(square_ids_cells, return_inverse=True, return_counts=True)
     # `inverse` is an re-numering of `square_ids_cells` following its order: 3, 4, 6 => 0, 1, 2
-    width_sample = int(cp.max(counts).tolist())
+    width_sample = cp.max(counts)
+    seq_unique_square_ids = cp.arange(0, counts.shape[0]).astype(cp.uint32)
+    seq_unique_square_ids = seq_unique_square_ids[inverse]  # now squares: 0, 0, 1, 1, 1, 2...
     # create a sequential index dor the cells in the squares: 
     # 1, 2, 3... for the cells in the first square, then 1, 2, .. for the cells in the second square
     # Trick: 1. shift `counts` one to the right, remove last element and append 0 at the beginning:
-
-    # replace insert
-    cell_index_shift = cp.zeros(shape=counts.shape)
-    cell_index_shift[1:] = counts[:-1]
+    cell_index_shift = cp.zeros(counts.shape[0] + 1)
+    cell_index_shift[1:] = counts
     cell_index_shift = cp.cumsum(cell_index_shift)  # [0, ncells in square0, ncells in square 1, etc...]
-    to_subtract = repeat(cell_index_shift, counts)  # repeat each element as many times as the corresponding square has cells
-
-    inds_cells_in_square = cp.arange(0, attractivity_cells.shape[0])
-    inds_cells_in_square = cp.subtract(inds_cells_in_square, to_subtract).astype(int)  # we have the right sequential order
-
-    order = cp.argsort(inverse)
-    inverse = inverse[order].astype(int)
-    attractivity_cells = attractivity_cells[order]
+    to_subtract = cell_index_shift[inverse]  # repeat each element as many times as the corresponding square has cells
+    # inds_cells_in_square = inds_cells_in_square[order]
+    seq_cell_ids_bis = cp.arange(0, to_subtract.shape[0])
+    inds_cells_in_square = cp.subtract(seq_cell_ids_bis, to_subtract)  # we have the right sequential order
 
     # Create `sample_arr`: one row for each square. The values first value in each row are the attractivity of its cell. Padded with 0.
-    print(f'DEBUG: type(unique_square_ids.shape[0]): {type(unique_square_ids.shape[0])}, type(width_sample): {type(width_sample)}')
-    cell_sampling_probas = cp.zeros((unique_square_ids.shape[0], width_sample))
-    cell_sampling_probas[inverse, inds_cells_in_square] = attractivity_cells
+    cell_sampling_probas = cp.zeros(shape=(counts.shape[0], int(width_sample)))
+    cell_sampling_probas[seq_unique_square_ids.astype(cp.uint32), inds_cells_in_square.astype(cp.uint32)] = attractivity_cells
     # Normalize the rows of `sample_arr` s.t. the rows are probability distribution
     cell_sampling_probas /= cp.linalg.norm(cell_sampling_probas, ord=1, axis=1, keepdims=True).astype(cp.float32)
-    return cell_sampling_probas, cell_index_shift
+    print(f'DEBUG: cell_sampling_probas:\n{cell_sampling_probas}')
+    return cell_sampling_probas, cell_index_shift, order
 
 
 
 def vectorized_choice(prob_matrix,axis=1):
-    """ 
-    selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise 
+    """
+    selects index according to weights in `prob_matrix` rows (if `axis`==0), cols otherwise
     see https://stackoverflow.com/questions/34187130/fast-random-weighted-selection-across-all-rows-of-a-stochastic-matrix
     """
     # s = prob_matrix.cumsum(axis=axis)
     r = cp.random.rand(prob_matrix.shape[1-axis]).reshape(2*(1-axis)-1, 2*axis - 1)
     k = (prob_matrix < r).sum(axis=axis)
     max_choice = prob_matrix.shape[axis]
-    # k[k>max_choice] = max_choice
+    k[k>max_choice] = max_choice
     return k
-
 
 
 def group_max(data, groups):
@@ -140,29 +144,20 @@ def sum_by_group(values, groups):
     return values, groups
 
 
-# For distances:
-# see: https://stackoverflow.com/questions/52030458/vectorized-spatial-distance-in-python-using-numpy
-
-def ext_arrs(A,B, precision="float64"):
-    nA,dim = A.shape
-    A_ext = cp.ones((nA,dim*3),dtype=precision)
-    A_ext[:,dim:2*dim] = A
-    A_ext[:,2*dim:] = A**2
-
-    nB = B.shape[0]
-    B_ext = cp.ones((dim*3,nB),dtype=precision)
-    B_ext[:dim] = (B**2).T
-    B_ext[dim:2*dim] = -2.0*B.T
-    return A_ext, B_ext
-
-def cdist(a):
-    A_ext, B_ext = ext_arrs(a,a)
-    dist = A_ext.dot(B_ext)
-    cp.fill_diagonal(dist,0)
-    dist = cp.sqrt(dist)
+def cdist(a, b):
+    dist = cp.sqrt(((b[:, None] - a[:, :, None]) ** 2).sum(0))
     return dist
 
 
 def repeat(data, count):
     data, count = data.tolist(), count.tolist()
     return cp.array(list(itertools.chain(*(itertools.repeat(elem, n) for elem, n in zip(data, count)))))
+
+def get_ind_in_arr(x, y):
+    """ returns the position in x of the elements in y that are in x """
+    index = cp.argsort(x)
+    sorted_x = x[index]
+    sorted_index = cp.searchsorted(sorted_x, y)
+    yindex = cp.take(index, sorted_index, mode="clip")
+    mask = x[yindex] != y
+    return yindex[~mask]
